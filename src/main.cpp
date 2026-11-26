@@ -1,0 +1,133 @@
+#include "Aligner.h"
+#include "OStimBridge.h"
+
+namespace
+{
+	float FrameDelta()
+	{
+		static auto last = std::chrono::steady_clock::now();
+		const auto now = std::chrono::steady_clock::now();
+		const float dt = std::chrono::duration<float>(now - last).count();
+		last = now;
+		return dt;
+	}
+
+	// Primary: the call inside Main::Update that runs once per frame on the main thread
+	// (the same spot many SKSE plugins use). PlayerCharacter::Update can't be used: it stops
+	// being called while OStim runs a player scene. Verified at runtime before patching,
+	// because a wrong offset would corrupt code.
+	struct MainUpdateHook
+	{
+		// pass the integer argument registers and the return value through untouched
+		static std::uintptr_t thunk(std::uintptr_t a1, std::uintptr_t a2, std::uintptr_t a3, std::uintptr_t a4)
+		{
+			const auto result = func(a1, a2, a3, a4);
+			OAA::Aligner::Get().Update(FrameDelta());
+			return result;
+		}
+		static inline REL::Relocation<decltype(thunk)> func;
+
+		static bool Install()
+		{
+			REL::Relocation<std::uintptr_t> target{ REL::RelocationID(35565, 36564), REL::VariantOffset(0x748, 0xC26, 0x7EE) };
+			const auto addr = target.address();
+
+			const auto& module = REL::Module::get();
+			const auto text = module.segment(REL::Segment::textx);
+			const auto textBegin = text.address();
+			const auto textEnd = textBegin + text.size();
+
+			const auto opcode = *reinterpret_cast<const std::uint8_t*>(addr);
+			const auto rel = *reinterpret_cast<const std::int32_t*>(addr + 1);
+			const auto callee = addr + 5 + static_cast<std::intptr_t>(rel);
+			logger::info("Main::Update call site +{:X}: opcode {:02X}, callee +{:X}", addr - module.base(), opcode, callee - module.base());
+			if (opcode != 0xE8 || callee < textBegin || callee >= textEnd) {
+				logger::warn("Main::Update call site doesn't look like a CALL, not patching it");
+				return false;
+			}
+
+			func = SKSE::GetTrampoline().write_call<5>(addr, thunk);
+			logger::info("installed Main::Update hook");
+			return true;
+		}
+	};
+
+	// Fallback: HUD menu frame advance (runs every frame while the HUD exists).
+	struct HUDAdvanceHook
+	{
+		static void thunk(RE::IMenu* a_this, float a_interval, std::uint32_t a_currentTime)
+		{
+			func(a_this, a_interval, a_currentTime);
+			OAA::Aligner::Get().Update(FrameDelta());
+		}
+		static inline REL::Relocation<decltype(thunk)> func;
+
+		static void Install()
+		{
+			REL::Relocation<std::uintptr_t> vtbl{ RE::VTABLE_HUDMenu[0] };
+			func = vtbl.write_vfunc(0x5, thunk);
+			logger::info("installed HUDMenu::AdvanceMovie hook (fallback)");
+		}
+	};
+
+	// Character/PlayerCharacter::UpdateAnimation: runs after the animation pose is written,
+	// which is where the leg IK has to bend the bones.
+	template <class T>
+	struct UpdateAnimationHook
+	{
+		static void thunk(T* a_this, float a_delta)
+		{
+			func(a_this, a_delta);
+			OAA::Aligner::Get().OnActorAnimated(a_this);
+		}
+		static inline REL::Relocation<decltype(thunk)> func;
+
+		static void Install(REL::VariantID a_vtbl, const char* a_name)
+		{
+			REL::Relocation<std::uintptr_t> vtbl{ a_vtbl };
+			func = vtbl.write_vfunc(0x7D, thunk);
+			logger::info("installed {}::UpdateAnimation hook", a_name);
+		}
+	};
+
+	bool g_connected = false;
+
+	void OnMessage(SKSE::MessagingInterface::Message* a_msg)
+	{
+		if (!a_msg) {
+			return;
+		}
+		switch (a_msg->type) {
+		case SKSE::MessagingInterface::kPostPostLoad:
+			g_connected = OAA::Bridge::Connect();
+			if (g_connected) {
+				// Main::Update call-site offsets differ on 1.6.1170, so the HUD advance is the default.
+				HUDAdvanceHook::Install();
+				UpdateAnimationHook<RE::Character>::Install(RE::VTABLE_Character[0], "Character");
+				UpdateAnimationHook<RE::PlayerCharacter>::Install(RE::VTABLE_PlayerCharacter[0], "PlayerCharacter");
+			}
+			break;
+		case SKSE::MessagingInterface::kPreLoadGame:
+			if (g_connected) {
+				// 3D is rebuilt on load; just forget everything
+				SKSE::GetTaskInterface()->AddTask([]() { OAA::Aligner::Get().RestoreAll(); });
+			}
+			break;
+		default:
+			break;
+		}
+	}
+}
+
+SKSEPluginLoad(const SKSE::LoadInterface* a_skse)
+{
+	SKSE::Init(a_skse, { .log = true, .logLevel = spdlog::level::info, .trampoline = true, .trampolineSize = 64 });
+	logger::info("{} {} loading", SKSE::GetPluginName(), SKSE::GetPluginVersion().string());
+
+	const auto messaging = SKSE::GetMessagingInterface();
+	if (!messaging || !messaging->RegisterListener(OnMessage)) {
+		logger::error("failed to register the SKSE message listener");
+		return false;
+	}
+	return true;
+}
