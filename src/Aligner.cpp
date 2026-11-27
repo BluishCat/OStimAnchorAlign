@@ -14,6 +14,54 @@ namespace OAA
 		const RE::BSFixedString kPelvis{ "NPC Pelvis [Pelv]" };
 		const RE::BSFixedString kSpine2{ "NPC Spine2 [Spn2]" };
 
+		// heel height of a shoe mesh, read the same way OStim / the heel frameworks do
+		float MeshHeel(RE::NiAVObject* a_obj)
+		{
+			if (!a_obj) {
+				return 0.0f;
+			}
+			if (auto hh = a_obj->GetExtraData<RE::NiFloatExtraData>("HH_OFFSET")) {
+				return hh->value;
+			}
+			if (auto sdta = a_obj->GetExtraData<RE::NiStringExtraData>("SDTA"); sdta && sdta->value) {
+				const auto j = nlohmann::json::parse(sdta->value, nullptr, false);
+				if (j.is_array()) {
+					for (const auto& e : j) {
+						if (e.is_object() && e.value("name", "") == "NPC" && e.contains("pos") && e["pos"].is_array() && e["pos"].size() >= 3) {
+							return e["pos"][2].get<float>();
+						}
+					}
+				}
+			}
+			return 0.0f;
+		}
+
+		float ShoeHeel(RE::Actor* a_actor)
+		{
+			auto& biped = a_actor->GetBiped(false);
+			if (!biped) {
+				return 0.0f;
+			}
+			for (auto& data : biped->objects) {
+				if (!data.partClone || !data.item || data.item->GetFormType() != RE::FormType::Armor || !data.addon ||
+					!data.addon->HasPartOf(RE::BIPED_MODEL::BipedObjectSlot::kFeet)) {
+					continue;
+				}
+				auto obj = data.partClone.get();
+				if (float h = MeshHeel(obj); h != 0.0f) {
+					return h;
+				}
+				if (auto node = obj->AsNode()) {
+					for (auto& child : node->GetChildren()) {
+						if (float h = MeshHeel(child.get()); h != 0.0f) {
+							return h;
+						}
+					}
+				}
+			}
+			return 0.0f;
+		}
+
 		bool Near(const RE::NiPoint3& a, const RE::NiPoint3& b, float eps = 0.001f)
 		{
 			return std::fabs(a.x - b.x) <= eps && std::fabs(a.y - b.y) <= eps && std::fabs(a.z - b.z) <= eps;
@@ -351,7 +399,7 @@ namespace OAA
 		// world position the bone would have if its actor had reference height (and no offset of ours)
 		auto ref = [](const ActorState& s, const RE::NiPoint3& p) {
 			const auto rootP = s.root->world.translate;
-			return rootP + (p - s.currentWorld - rootP) / s.height;
+			return rootP + (p - s.currentWorld - rootP - s.heelWorld) / s.height;
 		};
 
 		// 2. per hand: nearest target among this stage's hand rules (in reference space)
@@ -393,6 +441,11 @@ namespace OAA
 								// the gap was measured on a reference-size body part; on the real one it
 								// scales with the target's size (a smaller head = hand closer to the bone)
 								desired = tp + gap * Bt.height;
+								if (hr.target == "breast" && (cfg.breastUp != 0.0f || cfg.breastForward != 0.0f)) {
+									// body presets with bigger/heavier breasts than the animation's
+									// reference body put the surface somewhere else; user offset
+									desired += (Bt.root->world.rotate * RE::NiPoint3{ 0.0f, cfg.breastForward, cfg.breastUp }) * Bt.height;
+								}
 								target = &hr.target;
 								arm.gap = gap;
 							}
@@ -658,6 +711,25 @@ namespace OAA
 			}
 			// world-space effect of what we wrote last frame (the bones we read were posed with it)
 			a.prevWorld = (a.parent->world.rotate * a.appliedLocal) * a.parent->world.scale;
+			// heels: NiOverride lifts the whole skeleton through the same node. The animation was made
+			// without that lift, so it is part of the error just like the scale (OStim's heel removal
+			// cancels it, then this is ~0).
+			a.heelWorld = {};
+			RE::NiPoint3 baseLocal{};
+			{
+				const auto& t = npc->local.translate;
+				baseLocal = (a.written && Near(t, a.lastWritten)) ? a.lastWritten - a.appliedLocal : t;
+				if (baseLocal.SqrLength() < 0.0001f || baseLocal.Length() > 40.0f) {
+					baseLocal = {};  // nothing, or not a heel offset
+				}
+			}
+			if (cfg.heelAware) {
+				a.heelWorld = (a.parent->world.rotate * baseLocal) * a.parent->world.scale;
+			}
+			if (--a.shoeTimer <= 0) {
+				a.shoeTimer = 30;
+				a.shoeHeel = ShoeHeel(actor.get());
+			}
 
 			// standing/kneeling/lying on the floor = some lower-body bone is near the actor's base;
 			// such an actor can't move vertically without sinking into or floating above the floor
@@ -731,6 +803,27 @@ namespace OAA
 			if (settled) {
 				a.kneelingLatch = a.kneeling;
 			}
+			// OStim removes the heel lift in scenes not flagged "feetOnGround" (many standing scenes of
+			// some packs), which sinks the shoes into the floor. Give it back while the actor stands on
+			// its feet; the alignment below then treats it like any other heel lift.
+			float wantRestore = 0.0f;
+			if (on && cfg.heelAware && cfg.restoreHeels && a.shoeHeel > 0.5f && a.grounded && !a.kneeling && !a.lying) {
+				wantRestore = std::max(0.0f, a.shoeHeel - baseLocal.z);
+				if (wantRestore < 0.5f) {
+					wantRestore = 0.0f;
+				}
+			}
+			{
+				const float k = 1.0f - std::exp(-a_delta / 0.25f);
+				a.restoreLocal += (wantRestore - a.restoreLocal) * k;
+				if (wantRestore == 0.0f && a.restoreLocal < 0.05f) {
+					a.restoreLocal = 0.0f;
+				}
+			}
+			a.restoreWorld = (a.parent->world.rotate * RE::NiPoint3{ 0.0f, 0.0f, a.restoreLocal }) * a.parent->world.scale;
+			if (cfg.heelAware) {
+				a.heelWorld += a.restoreWorld;
+			}
 			hMin = std::min(hMin, a.height);
 			hMax = std::max(hMax, a.height);
 		}
@@ -755,12 +848,17 @@ namespace OAA
 			if (!boneA || !boneB) {
 				continue;
 			}
+			// error = actual position - where the bone would be at reference height without heels
 			auto err = [&](const ActorState& s, RE::NiAVObject* bone) {
-				if (std::fabs(s.height - 1.0f) < cfg.minHeightDiff) {
+				const bool scaled = std::fabs(s.height - 1.0f) >= cfg.minHeightDiff;
+				const bool heeled = s.heelWorld.SqrLength() > 0.0f;
+				if (!scaled && !heeled) {
 					return RE::NiPoint3{};
 				}
-				const auto p0 = bone->world.translate - s.prevWorld;
-				return (p0 - s.root->world.translate) * (1.0f - 1.0f / s.height);
+				const float h = scaled ? s.height : 1.0f;
+				// prevWorld removed everything we wrote; the heel we restore is part of the pose again
+				const auto rel = bone->world.translate - s.prevWorld - s.root->world.translate + s.restoreWorld;
+				return rel - (rel - s.heelWorld) / h;
 			};
 			rels.push_back({ c.a, c.b, c.weight, -(err(A, boneA) - err(B, boneB)) });
 		}
@@ -942,12 +1040,15 @@ namespace OAA
 			// --- 5. write into the "NPC" node (local space of its parent) ---
 			const float ps = a.parent->world.scale > 0.0001f ? a.parent->world.scale : 1.0f;
 			const auto local = (a.parent->world.rotate.Transpose() * a.currentWorld) / ps;
+			// what gets written also lifts the heels back; the leg IK only gets the alignment part, so
+			// the feet end up on the floor at heel height instead of being planted where OStim sank them
+			const auto writeLocal = local + RE::NiPoint3{ 0.0f, 0.0f, a.restoreLocal };
 
 			// Leave the skeleton completely alone when there is nothing to apply, so other skeleton
 			// editors (Fabulous Poser etc.) aren't overwritten every frame. Remove our offset once
 			// when it has faded out.
-			const bool nothing = a.currentWorld.SqrLength() < 1e-4f;
-			if (nothing) {
+			const bool nothing = a.currentWorld.SqrLength() < 1e-4f && a.restoreLocal == 0.0f;
+			if (a.currentWorld.SqrLength() < 1e-4f) {
 				a.currentWorld = {};
 			}
 			if (!nothing || a.written) {
@@ -958,9 +1059,9 @@ namespace OAA
 					a.written = false;
 					a.appliedLocal = {};
 				} else {
-					t = base + local;
+					t = base + writeLocal;
 					a.lastWritten = t;
-					a.appliedLocal = local;
+					a.appliedLocal = writeLocal;
 					a.written = true;
 				}
 				RE::NiUpdateData ud{};
@@ -1024,7 +1125,7 @@ namespace OAA
 			for (size_t i = 0; i < n; ++i) {
 				const auto& a = a_state.actors[i];
 				const auto avg = a_state.samples ? a.sampleSum / static_cast<float>(a_state.samples) : RE::NiPoint3{};
-				s += std::format(" [{}] h={:.3f}{} offset={}", i, a.height, a.lying ? " lying" : a.grounded ? (a.kneeling ? " kneeling" : " grounded") : " lifted", Fmt(avg));
+				s += std::format(" [{}] h={:.3f} heel={:.1f} shoes={:.1f} restored={:.1f}{} offset={}", i, a.height, a.heelWorld.z, a.shoeHeel, a.restoreLocal, a.lying ? " lying" : a.grounded ? (a.kneeling ? " kneeling" : " grounded") : " lifted", Fmt(avg));
 			}
 			logger::info("thread {} node '{}' settled ({} samples, {} rules):{}", a_state.threadID, a_state.nodeID, a_state.samples, rels.size(), s);
 		}

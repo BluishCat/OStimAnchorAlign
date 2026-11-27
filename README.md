@@ -55,7 +55,8 @@ The log is `Documents/My Games/Skyrim Special Edition/SKSE/OStimAnchorAlign.log`
 ## Compatibility
 
 - **PPA - Procedural Penis Animations**: tested and recommended. Anchor Align brings the hips together, and PPA does the final penis bending.
-- **Fabulous Poser** and other live skeleton editors: press the pause hotkey while posing.
+- **Fabulous Poser** and other skeleton editors: since 0.5.0 everything runs on the main thread in a fixed order, which should stop jitter and snapping back (untested with Fabulous Poser). The pause hotkey turns all corrections off.
+- **High heels**: heel lift counts as part of the height difference (`bHeelAware`). When OStim removes the lift in standing scenes, it is given back so shoes don't sink into the floor (`bRestoreHeels`).
 
 ## Limits
 

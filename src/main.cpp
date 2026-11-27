@@ -13,6 +13,34 @@ namespace
 		return dt;
 	}
 
+	// The HUD advance runs on whatever job thread Scaleform uses this frame, i.e. in parallel
+	// with animation, CBPC/SMP physics and other skeleton editors. Writing bones from there
+	// makes the order random and the result jitter, so by default the work runs in Main::Update
+	// on the main thread. (SKSE tasks were tried too: they also run on worker threads.)
+	std::thread::id g_mainThread{};
+	bool g_useTask = true;
+	std::atomic<uint32_t> g_offMain{ 0 }, g_onMain{ 0 };
+
+	void RunUpdate()
+	{
+		(std::this_thread::get_id() == g_mainThread ? g_onMain : g_offMain).fetch_add(1, std::memory_order_relaxed);
+		static auto lastLog = std::chrono::steady_clock::now();
+		if (const auto now = std::chrono::steady_clock::now(); now - lastLog >= 30s) {
+			lastLog = now;
+			logger::info("update thread check: {} on the main thread, {} elsewhere (last 30s, mode {})", g_onMain.exchange(0), g_offMain.exchange(0),
+				g_useTask ? "Main::Update" : "HUD advance");
+		}
+		OAA::Aligner::Get().Update(FrameDelta());
+	}
+
+	void RequestUpdate()
+	{
+		if (!g_useTask) {
+			RunUpdate();  // legacy: run right here in the HUD advance
+		}
+		// otherwise Main::Update does the work
+	}
+
 	// Primary: the call inside Main::Update that runs once per frame on the main thread
 	// (the same spot many SKSE plugins use). PlayerCharacter::Update can't be used: it stops
 	// being called while OStim runs a player scene. Verified at runtime before patching,
@@ -23,7 +51,7 @@ namespace
 		static std::uintptr_t thunk(std::uintptr_t a1, std::uintptr_t a2, std::uintptr_t a3, std::uintptr_t a4)
 		{
 			const auto result = func(a1, a2, a3, a4);
-			OAA::Aligner::Get().Update(FrameDelta());
+			RunUpdate();  // already on the main thread
 			return result;
 		}
 		static inline REL::Relocation<decltype(thunk)> func;
@@ -42,7 +70,12 @@ namespace
 			const auto rel = *reinterpret_cast<const std::int32_t*>(addr + 1);
 			const auto callee = addr + 5 + static_cast<std::intptr_t>(rel);
 			logger::info("Main::Update call site +{:X}: opcode {:02X}, callee +{:X}", addr - module.base(), opcode, callee - module.base());
-			if (opcode != 0xE8 || callee < textBegin || callee >= textEnd) {
+			// the callee may be another plugin's trampoline (this call site is a popular hook), so
+			// only the opcode is checked; write_call chains to whatever is there
+			(void)textBegin;
+			(void)textEnd;
+			(void)callee;
+			if (opcode != 0xE8) {
 				logger::warn("Main::Update call site doesn't look like a CALL, not patching it");
 				return false;
 			}
@@ -59,7 +92,7 @@ namespace
 		static void thunk(RE::IMenu* a_this, float a_interval, std::uint32_t a_currentTime)
 		{
 			func(a_this, a_interval, a_currentTime);
-			OAA::Aligner::Get().Update(FrameDelta());
+			RequestUpdate();
 		}
 		static inline REL::Relocation<decltype(thunk)> func;
 
@@ -153,10 +186,16 @@ namespace
 		}
 		switch (a_msg->type) {
 		case SKSE::MessagingInterface::kPostPostLoad:
+			g_mainThread = std::this_thread::get_id();  // plugin messages arrive on the main thread
+			g_useTask = OAA::Settings::Load().updateHook == 1;
+			logger::info("per-frame work runs {}", g_useTask ? "in Main::Update (main thread)" : "directly in the HUD advance (legacy)");
 			g_connected = OAA::Bridge::Connect();
 			if (g_connected) {
-				// Main::Update call-site offsets differ on 1.6.1170, so the HUD advance is the default.
-				HUDAdvanceHook::Install();
+				// Main::Update (main thread) by default; the HUD advance only as a fallback.
+				if (!g_useTask || !MainUpdateHook::Install()) {
+					g_useTask = false;
+					HUDAdvanceHook::Install();
+				}
 				OAA::UI::Register();
 				UpdateAnimationHook<RE::Character>::Install(RE::VTABLE_Character[0], "Character");
 				UpdateAnimationHook<RE::PlayerCharacter>::Install(RE::VTABLE_PlayerCharacter[0], "PlayerCharacter");

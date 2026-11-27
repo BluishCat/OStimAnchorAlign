@@ -173,6 +173,14 @@ namespace OAA::UI
 
 			SeparatorText(T("General", "全般"));
 			Check("Enable", "有効にする", "enabled", &g_cfg.enabled);
+			Check("Include high-heel lift", "ハイヒールの高さも補正する", "heel", &g_cfg.heelAware);
+			BeginDisabled(!g_cfg.heelAware);
+			Check("Keep heels on the floor", "ヒールが床に埋まらないようにする", "restoreheels", &g_cfg.restoreHeels);
+			Help("Many standing scenes make OStim remove the heel lift, so the shoes sink into the floor. This gives the lift back while the actor stands.",
+				"多くの立ちシーンでOStimがヒールの持ち上げを外すため、靴が床に埋まります。立っている間はその持ち上げを戻します。");
+			EndDisabled();
+			Help("Heels lift the whole body, which the animation doesn't expect. With this on, the lift counts as part of the height difference (hips, faces and hands). No effect when OStim removes heels.",
+				"ヒールは体全体を持ち上げますが、アニメはそれを想定していません。オンにすると、ヒールの分も身長差として補正します（腰・顔・手）。OStimがヒールを外している場合は影響しません。");
 
 			// language
 			{
@@ -245,6 +253,11 @@ namespace OAA::UI
 			Slider("Elbow swivel (deg)", "肘の回転（度）", "swivel", &g_cfg.elbowSwivel, 0.0f, 120.0f, "%.0f");
 			Slider("Upper-body lean", "上半身の傾き", "lean", &g_cfg.spineLean, 0.0f, 1.0f);
 			Slider("Max lean (deg)", "傾きの上限（度）", "maxlean", &g_cfg.maxSpineLean, 0.0f, 60.0f, "%.0f");
+			Slider("Breast: hand up/down", "胸：手の位置（上下）", "breastup", &g_cfg.breastUp, -15.0f, 15.0f, "%.1f");
+			Help("Moves hands on breasts up (+) or down (-). Useful when the body has bigger breasts than the animation was made for.",
+				"胸に触れる手を上（＋）か下（－）にずらします。アニメの想定より胸が大きい体型のときに使います。");
+			Slider("Breast: hand forward/back", "胸：手の位置（前後）", "breastfwd", &g_cfg.breastForward, -15.0f, 15.0f, "%.1f");
+			Help("Moves hands on breasts away from (+) or toward (-) the chest.", "胸に触れる手を体から離す（＋）か、体に寄せる（－）方向にずらします。");
 			if (CollapsingHeader(L("Advanced", "詳細", "advarm").c_str())) {
 				Slider("Hand follows forearm", "手が前腕についていく割合", "follow", &g_cfg.wristFollow, 0.0f, 1.0f);
 				Slider("Hand smoothing (s)", "手のなめらかさ（秒）", "handsmooth", &g_cfg.handSmoothSeconds, 0.0f, 1.0f);

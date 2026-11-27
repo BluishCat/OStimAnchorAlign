@@ -93,6 +93,11 @@ namespace OAA
 			RE::NiAVObject* root = nullptr;
 			RE::NiAVObject* parent = nullptr;
 			RE::NiPoint3 prevWorld{};
+			RE::NiPoint3 heelWorld{};  // world-space heel lift in effect (NiOverride's + the part we restore)
+			RE::NiPoint3 restoreWorld{};  // world-space heel lift we add back (OStim removed it, actor stands)
+			float shoeHeel = 0.0f;        // heel height of the worn shoes (HH_OFFSET / SDTA), NPC-local units
+			float restoreLocal = 0.0f;    // smoothed heel restore, parent-local z
+			int shoeTimer = 0;            // frames until the shoes are checked again
 			float height = 1.0f;
 			bool isPlayer = false;
 			float supportHeight = 0.0f;  // lowest foot/calf bone above the actor's base

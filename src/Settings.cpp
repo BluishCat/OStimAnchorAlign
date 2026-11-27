@@ -81,7 +81,12 @@ namespace OAA
 		s.pauseKey = static_cast<uint32_t>(std::clamp(ReadInt(L"General", L"iPauseKey", 0xC5), 0, 0xFF));
 		s.pauseModifier = static_cast<uint32_t>(std::clamp(ReadInt(L"General", L"iPauseModifier", 0x2A), 0, 0xFF));
 		s.language = std::clamp(ReadInt(L"General", L"iLanguage", 0), 0, 2);
+		s.breastUp = ReadFloat(L"ArmIK", L"fBreastUp", 3.0f);
+		s.breastForward = ReadFloat(L"ArmIK", L"fBreastForward", 0.0f);
+		s.heelAware = ReadInt(L"General", L"bHeelAware", 1) != 0;
+		s.restoreHeels = ReadInt(L"General", L"bRestoreHeels", 1) != 0;
 		s.verbose = ReadInt(L"Debug", L"bVerboseLog", 0) != 0;
+		s.updateHook = std::clamp(ReadInt(L"Debug", L"iUpdateHook", 1), 0, 1);
 		return s;
 	}
 
@@ -143,6 +148,11 @@ namespace OAA
 		WriteFloat(L"ArmIK", L"fElbowSwivel", elbowSwivel);
 		WriteFloat(L"ArmIK", L"fSpineLean", spineLean);
 		WriteFloat(L"ArmIK", L"fMaxSpineLean", maxSpineLean);
+		WriteFloat(L"ArmIK", L"fBreastUp", breastUp);
+		WriteFloat(L"ArmIK", L"fBreastForward", breastForward);
+		WriteInt(L"General", L"bHeelAware", heelAware ? 1 : 0);
+		WriteInt(L"General", L"bRestoreHeels", restoreHeels ? 1 : 0);
 		WriteInt(L"Debug", L"bVerboseLog", verbose ? 1 : 0);
+		WriteInt(L"Debug", L"iUpdateHook", updateHook);
 	}
 }

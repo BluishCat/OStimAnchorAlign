@@ -49,7 +49,12 @@ namespace OAA
 		float spineLean = 0.5f;
 		float maxSpineLean = 25.0f;
 		float kneelTorsoUp = 15.0f;
+		float breastUp = 3.0f;       // extra hand offset on breast targets (target's up axis, units at height 1.0)
+		float breastForward = 0.0f;  // ... and forward axis (away from the chest)
+		bool heelAware = true;  // treat high-heel lift as part of the height difference
+		bool restoreHeels = true;  // give the heel lift back to standing actors when OStim removed it
 		bool verbose = false;
+		int updateHook = 1;  // 1 = run in Main::Update (main thread), 0 = directly in the HUD advance (legacy)
 		uint32_t pauseKey = 0xC5;       // DirectInput scan code, 0 = none
 		uint32_t pauseModifier = 0x2A;  // must be held with pauseKey, 0 = none
 		int language = 0;               // menu language: 0 = auto (game language), 1 = English, 2 = Japanese
