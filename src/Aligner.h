@@ -44,6 +44,13 @@ namespace OAA
 		// after an actor's animation update: bend the legs of actors we lowered
 		void OnActorAnimated(RE::Actor* a_actor);
 
+		// hotkey pause: while paused every correction fades out and the skeleton is left untouched
+		bool TogglePause() { return _paused = !_paused; }
+		bool IsPaused() const { return _paused.load(std::memory_order_relaxed); }
+
+		// apply changed settings to the scenes that are running right now (menu)
+		void ApplySettings(const Settings& a_settings);
+
 	private:
 		struct ArmState
 		{
@@ -164,6 +171,7 @@ namespace OAA
 		std::unordered_map<RE::FormID, IKEntry> _ik;
 		std::atomic<size_t> _ikCount{ 0 };
 		std::atomic<uint32_t> _animCalls{ 0 };
+		std::atomic<bool> _paused{ false };
 		bool _ikLogged = false;
 
 		std::mutex _lock;

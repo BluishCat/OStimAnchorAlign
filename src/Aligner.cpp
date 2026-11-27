@@ -123,6 +123,14 @@ namespace OAA
 			a_snapshot.actions.size(), state.constraints.size(), summary, settings.enabled ? "" : " [disabled in INI]");
 	}
 
+	void Aligner::ApplySettings(const Settings& a_settings)
+	{
+		std::scoped_lock lock(_lock);
+		for (auto& [id, t] : _threads) {
+			t.settings = a_settings;
+		}
+	}
+
 	void Aligner::OnThreadStop(int32_t a_threadID)
 	{
 		std::scoped_lock lock(_lock);
@@ -294,7 +302,7 @@ namespace OAA
 		};
 
 		const auto& cfg = a_state.settings;
-		const bool active = cfg.enabled && cfg.armIK;
+		const bool active = cfg.enabled && cfg.armIK && !IsPaused();
 		const size_t n = a_state.actors.size();
 
 		// 1. undo last frame's edit where the animation didn't overwrite it, and remember the pose
@@ -600,6 +608,7 @@ namespace OAA
 	bool Aligner::UpdateThread(ThreadState& a_state, float a_delta)
 	{
 		const auto& cfg = a_state.settings;
+		const bool on = cfg.enabled && !IsPaused();
 		const auto n = a_state.actors.size();
 		if (n == 0) {
 			a_state.failReason = "no actors";
@@ -909,7 +918,7 @@ namespace OAA
 			auto& a = a_state.actors[i];
 
 			RE::NiPoint3 target{};
-			if (cfg.enabled) {
+			if (on) {
 				if (cfg.mode == Mode::kRealtime) {
 					target = solved[i];
 				} else if (a_state.samples > 0) {
@@ -934,20 +943,33 @@ namespace OAA
 			const float ps = a.parent->world.scale > 0.0001f ? a.parent->world.scale : 1.0f;
 			const auto local = (a.parent->world.rotate.Transpose() * a.currentWorld) / ps;
 
-			auto& t = a.npcNode->local.translate;
-			const RE::NiPoint3 base = (a.written && Near(t, a.lastWritten)) ? a.lastWritten - a.appliedLocal : t;
-			t = base + local;
-			a.lastWritten = t;
-			a.appliedLocal = local;
-			a.written = true;
-			{
+			// Leave the skeleton completely alone when there is nothing to apply, so other skeleton
+			// editors (Fabulous Poser etc.) aren't overwritten every frame. Remove our offset once
+			// when it has faded out.
+			const bool nothing = a.currentWorld.SqrLength() < 1e-4f;
+			if (nothing) {
+				a.currentWorld = {};
+			}
+			if (!nothing || a.written) {
+				auto& t = a.npcNode->local.translate;
+				const RE::NiPoint3 base = (a.written && Near(t, a.lastWritten)) ? a.lastWritten - a.appliedLocal : t;
+				if (nothing) {
+					t = base;
+					a.written = false;
+					a.appliedLocal = {};
+				} else {
+					t = base + local;
+					a.lastWritten = t;
+					a.appliedLocal = local;
+					a.written = true;
+				}
 				RE::NiUpdateData ud{};
 				a.npcNode->Update(ud);
 			}
 
 			const bool kneelIK = cfg.kneelLift && a.kneeling && a.currentWorld.z > 0.3f;
 			const bool standIK = !a.kneeling && !a.lying && a.currentWorld.z < -0.3f;
-			if (cfg.enabled && cfg.legIK && a.grounded && (kneelIK || standIK)) {
+			if (on && cfg.legIK && a.grounded && (kneelIK || standIK)) {
 				SetIK(a.formID, local, kneelIK);
 				// apply right here too: this runs after the animation pose was written and before
 				// rendering (the NPC translation written here is visible), so bending now shows up

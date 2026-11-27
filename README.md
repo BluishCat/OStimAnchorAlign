@@ -44,6 +44,11 @@ action metadata:
 
 ## Settings
 
+**In-game menu (optional):** with [SKSE Menu Framework](https://www.nexusmods.com/skyrimspecialedition/mods/120352) installed, open its Mod Control Panel → *OStim Anchor Align*. Every option can be changed live, the pause hotkey can be bound by pressing it, and the menu language can be English or Japanese. Changes are saved to the INI.
+
+**Pause hotkey:** default **Left Shift + Pause** pauses/resumes all corrections. While paused (or when there is nothing to correct) the skeleton is left completely untouched, e.g. for posing with other tools.
+
+
 `SKSE/Plugins/OStimAnchorAlign.ini` is re-read on every scene change, so you can edit it in game.
 The log is `Documents/My Games/Skyrim Special Edition/SKSE/OStimAnchorAlign.log`.
 
@@ -56,4 +61,4 @@ The log is `Documents/My Games/Skyrim Special Edition/SKSE/OStimAnchorAlign.log`
 
 ## License
 
-GPL-3.0-or-later. Contains OStim Standalone's plugin interface headers (GPL-3.0, VersuchDrei and contributors).
+GPL-3.0-or-later. Contains OStim Standalone's plugin interface headers (GPL-3.0, VersuchDrei and contributors) and the SKSE Menu Framework header (MIT). See THIRD_PARTY_NOTICES.txt.

@@ -50,8 +50,14 @@ namespace OAA
 		float maxSpineLean = 25.0f;
 		float kneelTorsoUp = 15.0f;
 		bool verbose = false;
+		uint32_t pauseKey = 0xC5;       // DirectInput scan code, 0 = none
+		uint32_t pauseModifier = 0x2A;  // must be held with pauseKey, 0 = none
+		int language = 0;               // menu language: 0 = auto (game language), 1 = English, 2 = Japanese
 
 		// Re-reads Data/SKSE/Plugins/OStimAnchorAlign.ini. Cheap; called on every scene change.
 		static Settings Load();
+
+		// Writes every value back to the INI (comments and layout are kept).
+		void Save() const;
 	};
 }

@@ -1,5 +1,6 @@
 #include "Aligner.h"
 #include "OStimBridge.h"
+#include "UI.h"
 
 namespace
 {
@@ -90,6 +91,59 @@ namespace
 		}
 	};
 
+	// toggles the pause hotkey (iPauseKey); the key is re-read from the INI on every press
+	class PauseKeySink : public RE::BSTEventSink<RE::InputEvent*>
+	{
+	public:
+		static PauseKeySink* Get()
+		{
+			static PauseKeySink sink;
+			return &sink;
+		}
+
+		RE::BSEventNotifyControl ProcessEvent(RE::InputEvent* const* a_event, RE::BSTEventSource<RE::InputEvent*>*) override
+		{
+			if (!a_event) {
+				return RE::BSEventNotifyControl::kContinue;
+			}
+			for (auto e = *a_event; e; e = e->next) {
+				if (e->GetEventType() != RE::INPUT_EVENT_TYPE::kButton || e->GetDevice() != RE::INPUT_DEVICE::kKeyboard) {
+					continue;
+				}
+				const auto button = e->AsButtonEvent();
+				if (!button || !button->IsDown()) {
+					continue;
+				}
+				const auto cfg = OAA::Settings::Load();
+				if (cfg.pauseKey == 0 || button->GetIDCode() != cfg.pauseKey) {
+					continue;
+				}
+				if (cfg.pauseModifier != 0) {
+					// scan code -> virtual key (distinguishes left/right Shift, Ctrl, Alt)
+					UINT vk = ::MapVirtualKeyW(cfg.pauseModifier & 0x7F, MAPVK_VSC_TO_VK_EX);
+					if (cfg.pauseModifier == 0x9D) {
+						vk = VK_RCONTROL;
+					} else if (cfg.pauseModifier == 0xB8) {
+						vk = VK_RMENU;
+					}
+					if (vk == 0 || (::GetAsyncKeyState(static_cast<int>(vk)) & 0x8000) == 0) {
+						continue;
+					}
+				}
+				if (OAA::UI::IsCapturingKey() || OAA::UI::IsMenuOpen()) {
+					continue;
+				}
+				if (auto ui = RE::UI::GetSingleton(); ui && (ui->IsMenuOpen(RE::Console::MENU_NAME) || ui->GameIsPaused())) {
+					continue;
+				}
+				const bool paused = OAA::Aligner::Get().TogglePause();
+				logger::info("correction {} by hotkey", paused ? "paused" : "resumed");
+				RE::SendHUDMessage::ShowHUDMessage(paused ? "OStim Anchor Align: paused" : "OStim Anchor Align: resumed");
+			}
+			return RE::BSEventNotifyControl::kContinue;
+		}
+	};
+
 	bool g_connected = false;
 
 	void OnMessage(SKSE::MessagingInterface::Message* a_msg)
@@ -103,8 +157,17 @@ namespace
 			if (g_connected) {
 				// Main::Update call-site offsets differ on 1.6.1170, so the HUD advance is the default.
 				HUDAdvanceHook::Install();
+				OAA::UI::Register();
 				UpdateAnimationHook<RE::Character>::Install(RE::VTABLE_Character[0], "Character");
 				UpdateAnimationHook<RE::PlayerCharacter>::Install(RE::VTABLE_PlayerCharacter[0], "PlayerCharacter");
+			}
+			break;
+		case SKSE::MessagingInterface::kInputLoaded:
+			if (g_connected) {
+				if (auto input = RE::BSInputDeviceManager::GetSingleton()) {
+					input->AddEventSink(PauseKeySink::Get());
+					logger::info("pause hotkey listener registered");
+				}
 			}
 			break;
 		case SKSE::MessagingInterface::kPreLoadGame:

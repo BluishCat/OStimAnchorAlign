@@ -34,6 +34,11 @@
 
 ## 設定
 
+**ゲーム内メニュー（任意）**：[SKSE Menu Framework](https://www.nexusmods.com/skyrimspecialedition/mods/120352) を入れていれば、Modコントロールパネル →「OStim Anchor Align」から全項目をその場で変更できます。一時停止キーはキーを押して登録でき、表示言語は英語と日本語から選べます。変更はINIに保存されます。
+
+**一時停止キー**：標準は **左Shift + Pause** で、すべての補正を一時停止・再開します。一時停止中や補正するものがないときは、スケルトンに一切触れないので、他のポーズ編集ツールと併用できます。
+
+
 `SKSE/Plugins/OStimAnchorAlign.ini` はシーンが切り替わるたびに読み直されるので、ゲーム中に編集できます。
 ログは `Documents/My Games/Skyrim Special Edition/SKSE/OStimAnchorAlign.log` です。
 
@@ -46,4 +51,4 @@
 
 ## ライセンス
 
-GPL-3.0-or-later。OStim Standaloneのプラグインインターフェースのヘッダー（GPL-3.0、VersuchDrei ほか）を含みます。
+GPL-3.0-or-later。OStim Standaloneのプラグインインターフェースのヘッダー（GPL-3.0、VersuchDrei ほか）と、SKSE Menu Framework のヘッダー（MIT）を含みます。詳しくは THIRD_PARTY_NOTICES.txt を参照してください。

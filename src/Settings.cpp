@@ -78,7 +78,71 @@ namespace OAA
 		s.elbowSwivel = std::clamp(ReadFloat(L"ArmIK", L"fElbowSwivel", s.elbowSwivel), 0.0f, 120.0f);
 		s.spineLean = std::clamp(ReadFloat(L"ArmIK", L"fSpineLean", s.spineLean), 0.0f, 1.0f);
 		s.maxSpineLean = std::clamp(ReadFloat(L"ArmIK", L"fMaxSpineLean", s.maxSpineLean), 0.0f, 60.0f);
+		s.pauseKey = static_cast<uint32_t>(std::clamp(ReadInt(L"General", L"iPauseKey", 0xC5), 0, 0xFF));
+		s.pauseModifier = static_cast<uint32_t>(std::clamp(ReadInt(L"General", L"iPauseModifier", 0x2A), 0, 0xFF));
+		s.language = std::clamp(ReadInt(L"General", L"iLanguage", 0), 0, 2);
 		s.verbose = ReadInt(L"Debug", L"bVerboseLog", 0) != 0;
 		return s;
+	}
+
+	namespace
+	{
+		void WriteRaw(const wchar_t* a_section, const wchar_t* a_key, const std::wstring& a_value)
+		{
+			// leading space keeps the "key = value" layout (it is trimmed when read)
+			const std::wstring v = L" " + a_value;
+			::WritePrivateProfileStringW(a_section, a_key, v.c_str(), kIniPath);
+		}
+		void WriteFloat(const wchar_t* a_section, const wchar_t* a_key, float a_value)
+		{
+			WriteRaw(a_section, a_key, std::format(L"{:.3g}", a_value));
+		}
+		void WriteInt(const wchar_t* a_section, const wchar_t* a_key, int a_value)
+		{
+			WriteRaw(a_section, a_key, std::to_wstring(a_value));
+		}
+		void WriteHex(const wchar_t* a_section, const wchar_t* a_key, uint32_t a_value)
+		{
+			WriteRaw(a_section, a_key, std::format(L"0x{:02X}", a_value));
+		}
+	}
+
+	void Settings::Save() const
+	{
+		WriteInt(L"General", L"bEnabled", enabled ? 1 : 0);
+		WriteHex(L"General", L"iPauseKey", pauseKey);
+		WriteHex(L"General", L"iPauseModifier", pauseModifier);
+		WriteInt(L"General", L"iLanguage", language);
+		WriteInt(L"General", L"iMode", static_cast<int>(mode));
+		WriteFloat(L"General", L"fSettleSeconds", settleSeconds);
+		WriteFloat(L"General", L"fSampleSeconds", sampleSeconds);
+		WriteFloat(L"General", L"fSmoothSeconds", smoothSeconds);
+		WriteInt(L"General", L"iMoveMode", static_cast<int>(moveMode));
+		WriteFloat(L"General", L"fStrength", strength);
+		WriteFloat(L"General", L"fHorizontalScale", horizontalScale);
+		WriteFloat(L"General", L"fVerticalScale", verticalScale);
+		WriteFloat(L"General", L"fMaxOffset", maxOffset);
+		WriteFloat(L"General", L"fMinHeightDiff", minHeightDiff);
+		WriteFloat(L"General", L"fGroundedHeight", groundedHeight);
+		WriteFloat(L"General", L"fGroundedZMobility", groundedZMobility);
+		WriteFloat(L"General", L"fLyingHeight", lyingHeight);
+		WriteInt(L"LegIK", L"bEnabled", legIK ? 1 : 0);
+		WriteFloat(L"LegIK", L"fMaxDrop", maxLegDrop);
+		WriteInt(L"LegIK", L"bKneelLift", kneelLift ? 1 : 0);
+		WriteFloat(L"LegIK", L"fKneelRiseShare", kneelRiseShare);
+		WriteFloat(L"LegIK", L"fKneelHeight", kneelHeight);
+		WriteFloat(L"LegIK", L"fKneelMinHipHeight", kneelMinHipHeight);
+		WriteFloat(L"LegIK", L"fMaxKneelRise", maxKneelRise);
+		WriteFloat(L"LegIK", L"fKneelTorsoUp", kneelTorsoUp);
+		WriteInt(L"ArmIK", L"bEnabled", armIK ? 1 : 0);
+		WriteFloat(L"ArmIK", L"fReach", handReach);
+		WriteFloat(L"ArmIK", L"fMaxShift", maxHandShift);
+		WriteFloat(L"ArmIK", L"fSmoothSeconds", handSmoothSeconds);
+		WriteFloat(L"ArmIK", L"fWristFollow", wristFollow);
+		WriteFloat(L"ArmIK", L"fMaxWristAngle", maxWristAngle);
+		WriteFloat(L"ArmIK", L"fElbowSwivel", elbowSwivel);
+		WriteFloat(L"ArmIK", L"fSpineLean", spineLean);
+		WriteFloat(L"ArmIK", L"fMaxSpineLean", maxSpineLean);
+		WriteInt(L"Debug", L"bVerboseLog", verbose ? 1 : 0);
 	}
 }
