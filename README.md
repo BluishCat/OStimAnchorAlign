@@ -52,6 +52,11 @@ action metadata:
 `SKSE/Plugins/OStimAnchorAlign.ini` is re-read on every scene change, so you can edit it in game.
 The log is `Documents/My Games/Skyrim Special Edition/SKSE/OStimAnchorAlign.log`.
 
+## Compatibility
+
+- **PPA - Procedural Penis Animations**: tested and recommended. Anchor Align brings the hips together, and PPA does the final penis bending.
+- **Fabulous Poser** and other live skeleton editors: press the pause hotkey while posing.
+
 ## Limits
 
 - Arms that can't reach stop fully extended. Fingers keep their animated shape.

@@ -42,6 +42,11 @@
 `SKSE/Plugins/OStimAnchorAlign.ini` はシーンが切り替わるたびに読み直されるので、ゲーム中に編集できます。
 ログは `Documents/My Games/Skyrim Special Edition/SKSE/OStimAnchorAlign.log` です。
 
+## 互換性
+
+- **PPA - Procedural Penis Animations**：テスト済みで、併用をおすすめします。このMODが腰同士を近づけ、PPAが最後に陰茎を曲げて合わせます。
+- **Fabulous Poser** などのポーズ編集MOD：ポーズを編集する間は、一時停止キーで補正を止めてください。
+
 ## 制限
 
 - 腕を伸ばしきっても届かない場合は、伸ばしきった位置で止まります。指の形はアニメのままです。
