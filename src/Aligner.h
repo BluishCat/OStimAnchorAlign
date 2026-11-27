@@ -45,6 +45,31 @@ namespace OAA
 		void OnActorAnimated(RE::Actor* a_actor);
 
 	private:
+		struct ArmState
+		{
+			RE::NiPointer<RE::NiAVObject> upper, lower, end, finger;
+			bool resolved = false;
+			bool written = false;
+			RE::NiMatrix3 origU{}, origL{}, origE{};   // animation pose before our edit
+			RE::NiMatrix3 wroteU{}, wroteL{}, wroteE{}; // what we wrote
+			RE::NiPoint3 delta{};                       // smoothed hand correction (world)
+			float weight = 0.0f;
+			std::string target;                         // for the log
+			float lastError = 0.0f;
+			RE::NiPoint3 gap{};  // hand - target at reference height (log)
+			float swivel = 0.0f;
+			float wristBend = 0.0f;
+		};
+
+		struct SpineState
+		{
+			std::array<RE::NiPointer<RE::NiAVObject>, 2> bones;  // Spine1, Spine2
+			bool resolved = false;
+			bool written = false;
+			std::array<RE::NiMatrix3, 2> orig{}, wrote{};
+			float angle = 0.0f;  // log
+		};
+
 		struct ActorState
 		{
 			RE::ActorHandle handle;
@@ -72,6 +97,17 @@ namespace OAA
 			bool lying = false;          // pelvis or chest on the floor
 			bool lyingLatch = false;
 			float kneelRiseMax = 0.0f;   // how far the hips can rise before the thighs are upright
+			std::array<ArmState, 2> arms;
+			SpineState spine;
+			std::unordered_map<std::string, std::vector<RE::NiPointer<RE::NiAVObject>>> targetCache;
+		};
+
+		struct HandRule
+		{
+			int32_t a = -1;  // whose hands
+			int32_t b = -1;  // whose body part
+			std::string target;
+			std::string action;
 		};
 
 		struct Constraint
@@ -91,6 +127,7 @@ namespace OAA
 			Settings settings;
 			std::vector<ActorState> actors;
 			std::vector<Constraint> constraints;
+			std::vector<HandRule> handRules;
 			float timer = 0.0f;
 			uint32_t samples = 0;
 			bool sampleLogged = false;
@@ -104,6 +141,11 @@ namespace OAA
 		bool UpdateThread(ThreadState& a_state, float a_delta);
 		static RE::NiAVObject* FindBone(ActorState& a_actor, const std::string& a_anchor, const Anchors& a_anchors);
 		void Restore(ActorState& a_actor);
+		void UpdateArms(ThreadState& a_state, float a_delta);
+		static void ReleaseArm(ArmState& a_arm);
+		static void ReleaseSpine(SpineState& a_spine);
+		const std::vector<RE::NiPointer<RE::NiAVObject>>& HandTargets(ActorState& a_actor, const std::string& a_name);
+		bool _armLogged = false;
 		void SetIK(RE::FormID a_id, const RE::NiPoint3& a_offsetLocal, bool a_kneel);
 		void ClearIK(RE::FormID a_id);
 

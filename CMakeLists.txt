@@ -4,7 +4,7 @@ if(NOT DEFINED ENV{COMMONLIB_SSE_FOLDER})
     message(FATAL_ERROR "Missing COMMONLIB_SSE_FOLDER environment variable")
 endif()
 
-project(OStimAnchorAlign VERSION 0.2.0 LANGUAGES CXX)
+project(OStimAnchorAlign VERSION 0.3.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

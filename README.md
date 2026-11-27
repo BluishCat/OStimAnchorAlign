@@ -29,6 +29,12 @@ action metadata:
 - Actors standing, kneeling or lying on the floor are never moved vertically. When a taller standing
   actor has to come down, the knees bend while the feet stay planted (leg IK, `[LegIK]`).
 - In lift/carry scenes, only the lifted actor is moved vertically.
+- A kneeling actor (incl. sitting on heels) that is too low raises the hips by straightening the thighs;
+  knees and feet stay planted. Actors lying on the floor are never moved vertically.
+- **Arm IK** (`[ArmIK]`): touching hands (groping breasts/butt, stroking the head, holding, fingering,
+  handjob, ...) are bent so the palm reaches the partner's body part the way it would at reference
+  height. The hand keeps its animated angle; the elbow swivels and the upper body leans a little to
+  keep the wrist natural. Hand rules are in `anchors.json` (`handTargets`, `handActions`).
 
 ## Requirements
 
@@ -43,7 +49,7 @@ The log is `Documents/My Games/Skyrim Special Edition/SKSE/OStimAnchorAlign.log`
 
 ## Limits
 
-- It only translates the whole body. Arm or leg length differences (hand positions) aren't changed.
+- Arms that can't reach stop fully extended. Fingers keep their animated shape.
 - With several conflicting rules the result is a weighted compromise.
 - If you already hand-aligned a scene for a given height combination in OStim's alignment menu,
   the corrections add up. Reset that alignment, or lower `fStrength`.

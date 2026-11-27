@@ -18,6 +18,12 @@ namespace OAA
 		// lower-case OStim action id -> rule
 		std::unordered_map<std::string, ActionRule> actions;
 
+		// hand target name -> bone groups; the first group with any existing bone is used, and every
+		// existing bone of that group is a candidate (the hand goes to the nearest one)
+		std::unordered_map<std::string, std::vector<std::vector<std::string>>> handTargets;
+		// lower-case OStim action id -> hand target name (the action actor's hand reaches the target's part)
+		std::unordered_map<std::string, std::string> handActions;
+
 		// Loads Data/SKSE/Plugins/OStimAnchorAlign/anchors.json; falls back to built-in defaults.
 		static Anchors Load();
 	};

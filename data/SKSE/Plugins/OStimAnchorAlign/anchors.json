@@ -6,7 +6,11 @@
 // "actions": OStim action id (see SKSE/Plugins/OStim/actions) -> which anchor of the action
 //            actor and of the action target should stay together, and how much this rule counts.
 //            Set an action to null to disable it. Actions not listed here are ignored.
-// "replaceDefaults": true drops the built-in action list, so only the actions below apply.
+// "handTargets": hand target name -> bone groups. The first group with any bone present on the
+//            skeleton is used; the hand goes to the nearest bone of that group.
+// "handActions": OStim action id -> hand target. The action actor's nearest hand is bent (arm IK)
+//            so it touches the target actor's part the way it would at reference height.
+// "replaceDefaults": true drops the built-in action and hand action lists, so only the ones below apply.
 {
   "replaceDefaults": false,
   "bones": {
@@ -34,8 +38,6 @@
     "vulvallicking": { "actor": "mouth", "target": "vagina", "weight": 1.0 },
     "anallicking": { "actor": "mouth", "target": "anus", "weight": 1.0 },
     "rimjob": { "actor": "mouth", "target": "anus", "weight": 1.0 },
-    "oralfingering": { "actor": "hand", "target": "mouth", "weight": 0.4 },
-    "oraltoying": { "actor": "hand", "target": "mouth", "weight": 0.4 },
     "kissing": { "actor": "mouth", "target": "mouth", "weight": 1.0 },
     "frenchkissing": { "actor": "mouth", "target": "mouth", "weight": 1.0 },
     "kissingcheek": { "actor": "mouth", "target": "head", "weight": 0.7 },
@@ -49,19 +51,51 @@
     "buttjob": { "actor": "pelvis", "target": "penis", "weight": 0.8 },
     "grindingpenis": { "actor": "pelvis", "target": "penis", "weight": 0.8 },
     "thighjob": { "actor": "thigh", "target": "penis", "weight": 0.6 },
-    "handjob": { "actor": "hand", "target": "penis", "weight": 0.5 },
     "footjob": { "actor": "foot", "target": "penis", "weight": 0.5 },
     "tribbing": { "actor": "pelvis", "target": "pelvis", "weight": 1.0 },
     "grindingthigh": { "actor": "pelvis", "target": "thigh", "weight": 0.5 },
-    "vaginalfingering": { "actor": "hand", "target": "pelvis", "weight": 0.4 },
-    "analfingering": { "actor": "hand", "target": "pelvis", "weight": 0.4 },
-    "vaginalfisting": { "actor": "hand", "target": "pelvis", "weight": 0.4 },
-    "analfisting": { "actor": "hand", "target": "pelvis", "weight": 0.4 },
-    "vaginaltoying": { "actor": "hand", "target": "pelvis", "weight": 0.4 },
-    "analtoying": { "actor": "hand", "target": "pelvis", "weight": 0.4 },
-    "vulvalrubbing": { "actor": "hand", "target": "vagina", "weight": 0.4 },
     "hugging": { "actor": "chest", "target": "chest", "weight": 0.4 },
     "cuddling": { "actor": "chest", "target": "chest", "weight": 0.4 },
     "spooning": { "actor": "chest", "target": "chest", "weight": 0.4 }
+  },
+  "handTargets": {
+    "breast": [["L Breast02", "R Breast02"], ["NPC L Breast", "NPC R Breast"], ["NPC Spine2 [Spn2]"]],
+    "butt": [["NPC L Butt", "NPC R Butt"], ["NPC Pelvis [Pelv]"]],
+    "vulva": [["Clitoral1", "VaginaB1"], ["NPC Pelvis [Pelv]"]],
+    "anus": [["NPC Pelvis [Pelv]"]],
+    "penis": [["NPC Genitals03 [Gen03]", "NPC Genitals02 [Gen02]"], ["NPC Pelvis [Pelv]"]],
+    "testicles": [["NPC GenitalsScrotum [GenScrot]"], ["NPC Pelvis [Pelv]"]],
+    "head": [["NPC Head [Head]"]],
+    "neck": [["NPC Neck [Neck]"]],
+    "hip": [["NPC Pelvis [Pelv]"]],
+    "thigh": [["NPC L FrontThigh", "NPC R FrontThigh"], ["NPC L Thigh [LThg]", "NPC R Thigh [RThg]"]],
+    "hand": [["NPC L Hand [LHnd]", "NPC R Hand [RHnd]"]],
+    "arm": [["NPC L Forearm [LLar]", "NPC R Forearm [RLar]"]],
+    "foot": [["NPC L Foot [Lft ]", "NPC R Foot [Rft ]"]],
+    "body": [["NPC Spine1 [Spn1]", "NPC Spine2 [Spn2]"]]
+  },
+  "handActions": {
+    "gropingbreast": "breast",
+    "breastslapping": "breast",
+    "gropingbutt": "butt",
+    "gropingtesticles": "testicles",
+    "handjob": "penis",
+    "vaginalfingering": "vulva",
+    "vaginalfisting": "vulva",
+    "vulvalrubbing": "vulva",
+    "analfingering": "anus",
+    "analfisting": "anus",
+    "pattinghead": "head",
+    "strokinghead": "head",
+    "holdinghead": "head",
+    "holdingchin": "head",
+    "holdingneck": "neck",
+    "holdinghip": "hip",
+    "holdingthigh": "thigh",
+    "holdingleg": "thigh",
+    "holdinghand": "hand",
+    "holdingarm": "arm",
+    "holdingfoot": "foot",
+    "holdingbody": "body"
   }
 }

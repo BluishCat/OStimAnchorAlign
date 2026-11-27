@@ -164,4 +164,103 @@ namespace OAA::LegIK
 		}
 		return result;
 	}
+
+	bool IsAncestorOf(RE::NiAVObject* a_ancestor, RE::NiAVObject* a_node)
+	{
+		return IsAncestor(a_ancestor, a_node);
+	}
+
+	float Reach(RE::NiAVObject* a_upper, RE::NiAVObject* a_lower, RE::NiAVObject* a_end, const RE::NiPoint3& a_target,
+		const RE::NiPoint3& a_fallbackPole, float a_endFollow, float a_maxEndAngle, float a_swivel, float* a_wristAngle)
+	{
+		const auto endLocal = a_end->local.rotate;  // animated wrist relative to the forearm
+		const auto S = a_upper->world.translate;
+		const auto E = a_lower->world.translate;
+		const auto W = a_end->world.translate;
+		const auto endRot = a_end->world.rotate;
+
+		const float a = Len(E - S);
+		const float b = Len(W - E);
+		const auto ST = a_target - S;
+		const float dRaw = Len(ST);
+		if (a < 0.5f || b < 0.5f || dRaw < 1e-3f) {
+			return Len(W - a_target);
+		}
+		const float d = std::clamp(dRaw, std::fabs(a - b) + 0.01f, a + b - 0.01f);
+		const auto u = ST / dRaw;
+
+		auto p = (E - S) - u * (E - S).Dot(u);
+		if (Len(p) < 0.05f * a) {
+			p = a_fallbackPole - u * a_fallbackPole.Dot(u);
+		}
+		p = Norm(p);
+		if (a_swivel != 0.0f) {
+			// swing the elbow around the shoulder->target axis
+			p = p * std::cos(a_swivel) + u.Cross(p) * std::sin(a_swivel);
+		}
+
+		const float cosA = std::clamp((a * a + d * d - b * b) / (2.0f * a * d), -1.0f, 1.0f);
+		const float sinA = std::sqrt(std::max(0.0f, 1.0f - cosA * cosA));
+		const auto newE = S + (u * cosA + p * sinA) * a;
+
+		SetWorldRotation(a_upper, RotBetween(E - S, newE - S) * a_upper->world.rotate);
+		const auto E2 = a_lower->world.translate;
+		SetWorldRotation(a_lower, RotBetween(a_end->world.translate - E2, a_target - E2) * a_lower->world.rotate);
+
+		// end orientation: start from "follows the lower bone" (animated wrist bend), turn toward
+		// "keeps the animated world orientation" by (1 - follow), but never more than a_maxEndAngle
+		const auto follow = a_lower->world.rotate * endLocal;
+		const auto D = follow.Transpose() * endRot;
+		const float tr = D.entry[0][0] + D.entry[1][1] + D.entry[2][2];
+		const float theta = std::acos(std::clamp((tr - 1.0f) * 0.5f, -1.0f, 1.0f));
+		if (a_wristAngle) {
+			*a_wristAngle = theta;  // wrist bend needed to keep the animated hand orientation
+		}
+		RE::NiMatrix3 result = follow;
+		if (theta > 1e-4f && theta < 3.1f) {
+			RE::NiPoint3 axis{ D.entry[2][1] - D.entry[1][2], D.entry[0][2] - D.entry[2][0], D.entry[1][0] - D.entry[0][1] };
+			axis = axis / (2.0f * std::sin(theta));
+			const float ang = std::min((1.0f - std::clamp(a_endFollow, 0.0f, 1.0f)) * theta, a_maxEndAngle);
+			const float c = std::cos(ang), sn = std::sin(ang);
+			const float k[3]{ axis.x, axis.y, axis.z };
+			const float K[3][3]{ { 0, -k[2], k[1] }, { k[2], 0, -k[0] }, { -k[1], k[0], 0 } };
+			RE::NiMatrix3 r;
+			for (int i = 0; i < 3; ++i) {
+				for (int j = 0; j < 3; ++j) {
+					r.entry[i][j] = (i == j ? c : 0.0f) + (1.0f - c) * k[i] * k[j] + sn * K[i][j];
+				}
+			}
+			result = follow * r;
+		} else if (theta <= 1e-4f) {
+			result = endRot;
+		}
+		SetWorldRotation(a_end, result);
+		return Len(a_end->world.translate - a_target);
+	}
+
+	float SwingToward(RE::NiAVObject* a_node, const RE::NiPoint3& a_from, const RE::NiPoint3& a_to, float a_fraction, float a_maxAngle)
+	{
+		const auto P = a_node->world.translate;
+		const auto f = Norm(a_from - P);
+		const auto t = Norm(a_to - P);
+		auto axis = f.Cross(t);
+		const float s = Len(axis);
+		if (s < 1e-5f) {
+			return 0.0f;
+		}
+		axis = axis / s;
+		const float full = std::atan2(s, f.Dot(t));
+		const float ang = std::min(full * std::clamp(a_fraction, 0.0f, 1.0f), a_maxAngle);
+		const float c = std::cos(ang), sn = std::sin(ang);
+		const float k[3]{ axis.x, axis.y, axis.z };
+		const float K[3][3]{ { 0, -k[2], k[1] }, { k[2], 0, -k[0] }, { -k[1], k[0], 0 } };
+		RE::NiMatrix3 r;
+		for (int i = 0; i < 3; ++i) {
+			for (int j = 0; j < 3; ++j) {
+				r.entry[i][j] = (i == j ? c : 0.0f) + (1.0f - c) * k[i] * k[j] + sn * K[i][j];
+			}
+		}
+		SetWorldRotation(a_node, r * a_node->world.rotate);
+		return ang;
+	}
 }

@@ -90,6 +90,23 @@ namespace OAA
 			state.constraints.push_back(std::move(c));
 		}
 
+		state.handRules.clear();
+		std::string handSummary;
+		for (const auto& act : a_snapshot.actions) {
+			const auto it = _anchors.handActions.find(act.id);
+			if (it == _anchors.handActions.end()) {
+				continue;
+			}
+			if (act.actor < 0 || act.target < 0 || act.actor >= count || act.target >= count || act.actor == act.target) {
+				continue;
+			}
+			state.handRules.push_back({ act.actor, act.target, it->second, act.id });
+			handSummary += std::format(" {}[{}:hand->{}:{}]", act.id, act.actor, act.target, it->second);
+		}
+		if (!handSummary.empty()) {
+			logger::info("thread {} node '{}' hand rules:{}", state.threadID, state.nodeID, handSummary);
+		}
+
 		state.lastOk = -1;
 		state.failReason = "not updated yet";
 		state.timer = 0.0f;
@@ -133,9 +150,96 @@ namespace OAA
 		_pendingRestore.clear();
 	}
 
+	void Aligner::ReleaseArm(ArmState& a_arm)
+	{
+		if (a_arm.written && a_arm.upper && a_arm.lower && a_arm.end) {
+			auto same = [](const RE::NiMatrix3& x, const RE::NiMatrix3& y) {
+				for (int r = 0; r < 3; ++r) {
+					for (int c = 0; c < 3; ++c) {
+						if (std::fabs(x.entry[r][c] - y.entry[r][c]) > 1e-5f) {
+							return false;
+						}
+					}
+				}
+				return true;
+			};
+			// only undo if the animation hasn't re-posed the arm since (paused animation)
+			if (same(a_arm.upper->local.rotate, a_arm.wroteU) && same(a_arm.lower->local.rotate, a_arm.wroteL) &&
+				same(a_arm.end->local.rotate, a_arm.wroteE)) {
+				a_arm.upper->local.rotate = a_arm.origU;
+				a_arm.lower->local.rotate = a_arm.origL;
+				a_arm.end->local.rotate = a_arm.origE;
+				RE::NiUpdateData ud{};
+				a_arm.upper->Update(ud);
+			}
+		}
+		a_arm.written = false;
+	}
+
+	void Aligner::ReleaseSpine(SpineState& a_spine)
+	{
+		if (a_spine.written) {
+			bool same = true;
+			for (size_t b = 0; b < 2 && same; ++b) {
+				if (!a_spine.bones[b]) {
+					continue;
+				}
+				const auto& m = a_spine.bones[b]->local.rotate;
+				for (int r = 0; r < 3 && same; ++r) {
+					for (int c = 0; c < 3; ++c) {
+						if (std::fabs(m.entry[r][c] - a_spine.wrote[b].entry[r][c]) > 1e-5f) {
+							same = false;
+							break;
+						}
+					}
+				}
+			}
+			if (same) {
+				for (size_t b = 0; b < 2; ++b) {
+					if (a_spine.bones[b]) {
+						a_spine.bones[b]->local.rotate = a_spine.orig[b];
+					}
+				}
+				if (a_spine.bones[0]) {
+					RE::NiUpdateData ud{};
+					a_spine.bones[0]->Update(ud);
+				}
+			}
+		}
+		a_spine.written = false;
+		a_spine.angle = 0.0f;
+	}
+
+	const std::vector<RE::NiPointer<RE::NiAVObject>>& Aligner::HandTargets(ActorState& a_actor, const std::string& a_name)
+	{
+		if (auto it = a_actor.targetCache.find(a_name); it != a_actor.targetCache.end()) {
+			return it->second;
+		}
+		std::vector<RE::NiPointer<RE::NiAVObject>> found;
+		if (auto it = _anchors.handTargets.find(a_name); it != _anchors.handTargets.end() && a_actor.root) {
+			for (const auto& group : it->second) {
+				for (const auto& name : group) {
+					if (auto obj = a_actor.root->GetObjectByName(RE::BSFixedString(name))) {
+						found.emplace_back(obj);
+					}
+				}
+				if (!found.empty()) {
+					break;
+				}
+			}
+		}
+		return a_actor.targetCache[a_name] = std::move(found);
+	}
+
 	void Aligner::Restore(ActorState& a_actor)
 	{
 		ClearIK(a_actor.formID);
+		for (auto& arm : a_actor.arms) {
+			ReleaseArm(arm);
+			arm = ArmState{};
+		}
+		ReleaseSpine(a_actor.spine);
+		a_actor.spine = SpineState{};
 		if (!a_actor.written || !a_actor.npcNode) {
 			return;
 		}
@@ -175,6 +279,242 @@ namespace OAA
 	{
 		_animCalls.fetch_add(1, std::memory_order_relaxed);
 		(void)a_actor;  // diagnostics only; the IK runs from the per-frame update
+	}
+
+	void Aligner::UpdateArms(ThreadState& a_state, float a_delta)
+	{
+		static const std::array<std::array<RE::BSFixedString, 3>, 2> kArms{ std::array<RE::BSFixedString, 3>{ "NPC L UpperArm [LUar]", "NPC L Forearm [LLar]", "NPC L Hand [LHnd]" },
+			std::array<RE::BSFixedString, 3>{ "NPC R UpperArm [RUar]", "NPC R Forearm [RLar]", "NPC R Hand [RHnd]" } };
+
+		static const std::array<RE::BSFixedString, 2> kFingers{ RE::BSFixedString{ "NPC L Finger20 [LF20]" }, RE::BSFixedString{ "NPC R Finger20 [RF20]" } };
+		// contact point = middle of the palm (between the wrist and the middle-finger knuckle); the
+		// wrist bone itself sits behind the palm, so aiming it would put the fingers past the target
+		auto palm = [](const ArmState& a_arm) {
+			return a_arm.finger ? (a_arm.end->world.translate + a_arm.finger->world.translate) * 0.5f : a_arm.end->world.translate;
+		};
+
+		const auto& cfg = a_state.settings;
+		const bool active = cfg.enabled && cfg.armIK;
+		const size_t n = a_state.actors.size();
+
+		// 1. undo last frame's edit where the animation didn't overwrite it, and remember the pose
+		static const std::array<RE::BSFixedString, 2> kSpine{ RE::BSFixedString{ "NPC Spine1 [Spn1]" }, RE::BSFixedString{ "NPC Spine2 [Spn2]" } };
+		for (auto& a : a_state.actors) {
+			if (!a.spine.resolved) {
+				a.spine.resolved = true;
+				for (size_t b = 0; b < 2; ++b) {
+					if (auto n = a.root->GetObjectByName(kSpine[b]); n && n->parent) {
+						a.spine.bones[b].reset(n);
+					}
+				}
+			}
+			ReleaseSpine(a.spine);
+			for (size_t b = 0; b < 2; ++b) {
+				if (a.spine.bones[b]) {
+					a.spine.orig[b] = a.spine.bones[b]->local.rotate;
+				}
+			}
+			for (size_t k = 0; k < 2; ++k) {
+				auto& arm = a.arms[k];
+				if (!arm.resolved) {
+					arm.resolved = true;
+					auto u = a.root->GetObjectByName(kArms[k][0]);
+					auto l = a.root->GetObjectByName(kArms[k][1]);
+					auto e = a.root->GetObjectByName(kArms[k][2]);
+					if (u && l && e && u->parent && l->parent && e->parent && LegIK::IsAncestorOf(u, l) && LegIK::IsAncestorOf(l, e)) {
+						arm.upper.reset(u);
+						arm.lower.reset(l);
+						arm.end.reset(e);
+						if (auto f = a.root->GetObjectByName(kFingers[k]); f && LegIK::IsAncestorOf(e, f)) {
+							arm.finger.reset(f);
+						}
+					}
+				}
+				if (!arm.upper) {
+					continue;
+				}
+				ReleaseArm(arm);
+				arm.origU = arm.upper->local.rotate;
+				arm.origL = arm.lower->local.rotate;
+				arm.origE = arm.end->local.rotate;
+			}
+		}
+
+		// world position the bone would have if its actor had reference height (and no offset of ours)
+		auto ref = [](const ActorState& s, const RE::NiPoint3& p) {
+			const auto rootP = s.root->world.translate;
+			return rootP + (p - s.currentWorld - rootP) / s.height;
+		};
+
+		// 2. per hand: nearest target among this stage's hand rules (in reference space)
+		struct Job
+		{
+			ArmState* arm;
+			size_t owner;
+			RE::NiPoint3 handPos, desired, pole;
+			float weight;
+			const std::string* target;
+		};
+		std::vector<Job> jobs;
+		const float alpha = cfg.handSmoothSeconds <= 0.0f ? 1.0f : 1.0f - std::exp(-a_delta / cfg.handSmoothSeconds);
+		for (size_t i = 0; i < n; ++i) {
+			auto& A = a_state.actors[i];
+			const auto down = A.root->world.rotate * RE::NiPoint3{ 0.0f, 0.0f, -1.0f };
+			for (size_t k = 0; k < 2; ++k) {
+				auto& arm = A.arms[k];
+				if (!arm.upper) {
+					continue;
+				}
+				const auto handPos = palm(arm);
+				const auto handRef = ref(A, handPos);
+				float best = 1e9f;
+				RE::NiPoint3 desired = handPos;
+				const std::string* target = nullptr;
+				if (active) {
+					for (const auto& hr : a_state.handRules) {
+						if (hr.a != static_cast<int32_t>(i)) {
+							continue;
+						}
+						auto& Bt = a_state.actors[hr.b];
+						for (const auto& bone : HandTargets(Bt, hr.target)) {
+							const auto tp = bone->world.translate;
+							const auto gap = handRef - ref(Bt, tp);
+							const float d = gap.Length();
+							if (d < best) {
+								best = d;
+								// the gap was measured on a reference-size body part; on the real one it
+								// scales with the target's size (a smaller head = hand closer to the bone)
+								desired = tp + gap * Bt.height;
+								target = &hr.target;
+								arm.gap = gap;
+							}
+						}
+					}
+				}
+				const float reach = cfg.handReach * A.height;
+				const float wanted = target ? std::clamp((1.5f * reach - best) / (0.5f * reach), 0.0f, 1.0f) : 0.0f;
+				auto raw = desired - handPos;
+				const float maxShift = cfg.maxHandShift * A.height;
+				if (const float len = raw.Length(); len > maxShift && len > 0.0f) {
+					raw *= maxShift / len;
+				}
+				if (wanted > 0.0f) {
+					arm.delta += (raw - arm.delta) * alpha;
+				}
+				arm.weight += (wanted - arm.weight) * alpha;
+				if (target) {
+					arm.target = *target;
+				}
+				if (arm.weight > 0.01f) {
+					jobs.push_back({ &arm, i, handPos, handPos + arm.delta * arm.weight, down, arm.weight, &arm.target });
+				} else {
+					arm.weight = 0.0f;
+					arm.delta = {};
+				}
+			}
+		}
+
+		// 3. lean: a person reaching down/forward bends the upper body instead of breaking the wrist.
+		// Swing Spine1 then Spine2 so the reaching shoulders travel part of the hand correction.
+		if (active && cfg.spineLean > 0.0f) {
+			for (size_t i = 0; i < n; ++i) {
+				auto& A = a_state.actors[i];
+				if (!A.spine.bones[0] || !A.spine.bones[1] || A.lying) {
+					continue;
+				}
+				RE::NiPoint3 shoulder{}, move{};
+				float w = 0.0f;
+				for (auto& j : jobs) {
+					if (j.owner != i) {
+						continue;
+					}
+					shoulder += j.arm->upper->world.translate * j.weight;
+					move += (j.desired - j.handPos) * j.weight;
+					w += j.weight;
+				}
+				if (w <= 0.0f) {
+					continue;
+				}
+				shoulder = shoulder / w;
+				move = move / w;
+				if (move.Length() < 2.0f) {
+					continue;
+				}
+				const auto goal = shoulder + move * cfg.spineLean;
+				const float maxA = cfg.maxSpineLean * 0.0174533f;
+				float total = LegIK::SwingToward(A.spine.bones[0].get(), shoulder, goal, 0.5f, maxA * 0.5f);
+				// shoulders moved with Spine1; recompute where they are now
+				RE::NiPoint3 shoulder2{};
+				for (auto& j : jobs) {
+					if (j.owner == i) {
+						shoulder2 += j.arm->upper->world.translate * j.weight;
+					}
+				}
+				shoulder2 = shoulder2 / w;
+				total += LegIK::SwingToward(A.spine.bones[1].get(), shoulder2, goal, 1.0f, maxA - total);
+				for (size_t b = 0; b < 2; ++b) {
+					A.spine.wrote[b] = A.spine.bones[b]->local.rotate;
+				}
+				A.spine.written = true;
+				A.spine.angle = total;
+			}
+		}
+
+		// 4. apply (after all targets were read, so hand-to-hand rules see the animated pose)
+		for (auto& j : jobs) {
+			auto& arm = *j.arm;
+			j.handPos = palm(arm);  // the palm moved if the spine leaned
+			// The hand keeps (mostly) its animated world orientation, so it meets the body part at the
+			// angle the animator intended. To avoid a broken wrist, pick the elbow swivel that needs the
+			// least wrist bend for that orientation; then iterate so the palm lands on the target.
+			const auto oU = arm.upper->local.rotate, oL = arm.lower->local.rotate, oE = arm.end->local.rotate;
+			auto resetPose = [&]() {
+				arm.upper->local.rotate = oU;
+				arm.lower->local.rotate = oL;
+				arm.end->local.rotate = oE;
+				RE::NiUpdateData ud{};
+				arm.upper->Update(ud);
+			};
+			const float maxWrist = cfg.maxWristAngle * 0.0174533f;
+			const auto wristStart = arm.end->world.translate + (j.desired - j.handPos);
+			float bestSwivel = 0.0f, bestBend = 1e9f;
+			const float range = cfg.elbowSwivel * 0.0174533f;
+			constexpr int kSteps = 4;
+			for (int si = -kSteps; si <= kSteps; ++si) {
+				const float sw = range * static_cast<float>(si) / kSteps;
+				float bend = 0.0f;
+				LegIK::Reach(arm.upper.get(), arm.lower.get(), arm.end.get(), wristStart, j.pole, cfg.wristFollow, maxWrist, sw, &bend);
+				bend += 0.15f * std::fabs(sw);  // prefer the animated elbow when it's about equal
+				if (bend < bestBend) {
+					bestBend = bend;
+					bestSwivel = sw;
+				}
+				resetPose();
+			}
+			auto wristTarget = wristStart;
+			for (int it = 0; it < 3; ++it) {
+				if (it > 0) {
+					resetPose();
+				}
+				LegIK::Reach(arm.upper.get(), arm.lower.get(), arm.end.get(), wristTarget, j.pole, cfg.wristFollow, maxWrist, bestSwivel, &arm.wristBend);
+				const auto miss = j.desired - palm(arm);
+				arm.lastError = miss.Length();
+				if (arm.lastError < 0.3f) {
+					break;
+				}
+				wristTarget += miss;
+			}
+			arm.swivel = bestSwivel;
+			arm.wroteU = arm.upper->local.rotate;
+			arm.wroteL = arm.lower->local.rotate;
+			arm.wroteE = arm.end->local.rotate;
+			arm.written = true;
+			if (!_armLogged) {
+				_armLogged = true;
+				logger::info("arm IK applied for the first time (target '{}', shift {:.1f}, remaining error {:.2f})", *j.target,
+					(j.desired - j.handPos).Length(), arm.lastError);
+			}
+		}
 	}
 
 	RE::NiAVObject* Aligner::FindBone(ActorState& a_actor, const std::string& a_anchor, const Anchors& a_anchors)
@@ -289,6 +629,11 @@ namespace OAA
 				// 3D was (re)loaded: start from scratch on the new skeleton
 				a.npcNode.reset(npc);
 				a.boneCache.clear();
+				a.targetCache.clear();
+				for (auto& arm : a.arms) {
+					arm = ArmState{};
+				}
+				a.spine = SpineState{};
 				a.written = false;
 				a.appliedLocal = {};
 				a.currentWorld = {};
@@ -595,6 +940,10 @@ namespace OAA
 			a.lastWritten = t;
 			a.appliedLocal = local;
 			a.written = true;
+			{
+				RE::NiUpdateData ud{};
+				a.npcNode->Update(ud);
+			}
 
 			const bool kneelIK = cfg.kneelLift && a.kneeling && a.currentWorld.z > 0.3f;
 			const bool standIK = !a.kneeling && !a.lying && a.currentWorld.z < -0.3f;
@@ -620,8 +969,6 @@ namespace OAA
 						}
 					}
 				}
-				RE::NiUpdateData ud{};
-				a.npcNode->Update(ud);
 				if (stillBent) {
 					continue;
 				}
@@ -647,6 +994,8 @@ namespace OAA
 			}
 		}
 
+		UpdateArms(a_state, a_delta);
+
 		if (cfg.mode == Mode::kStage && !a_state.sampleLogged && a_state.timer >= cfg.settleSeconds + cfg.sampleSeconds) {
 			a_state.sampleLogged = true;
 			std::string s;
@@ -666,6 +1015,13 @@ namespace OAA
 				for (size_t i = 0; i < n; ++i) {
 					const auto& a = a_state.actors[i];
 					s += std::format(" [{}] h={:.3f} support={:.1f}{} solved={} applied={}", i, a.height, a.supportHeight, a.lying ? " lying"s : a.grounded ? (a.kneeling ? std::format(" kneeling(rise<={:.1f})", a.kneelRiseMax) : " grounded"s) : " lifted"s, Fmt(solved[i]), Fmt(a.currentWorld));
+					for (size_t k = 0; k < 2; ++k) {
+						if (a.arms[k].weight > 0.0f) {
+							s += std::format(" {}hand->{}(w={:.2f} shift={} gap={} err={:.1f})", k ? "R" : "L", a.arms[k].target, a.arms[k].weight,
+								Fmt(a.arms[k].delta), Fmt(a.arms[k].gap), a.arms[k].lastError);
+							s += std::format("[swivel={:.0f} wrist={:.0f} lean={:.0f}]", a.arms[k].swivel * 57.3f, a.arms[k].wristBend * 57.3f, a.spine.angle * 57.3f);
+						}
+					}
 					std::scoped_lock ikLock(_ikLock);
 					if (auto it = _ik.find(a.formID); it != _ik.end()) {
 						s += std::format(" IK(applied={} footErr={:.2f} survived={}/{})", it->second.applied, it->second.footError,

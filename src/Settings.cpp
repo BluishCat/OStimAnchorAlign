@@ -69,6 +69,15 @@ namespace OAA
 		s.maxKneelRise = std::clamp(ReadFloat(L"LegIK", L"fMaxKneelRise", s.maxKneelRise), 0.0f, 100.0f);
 		s.lyingHeight = std::clamp(ReadFloat(L"General", L"fLyingHeight", s.lyingHeight), 0.0f, 200.0f);
 		s.kneelTorsoUp = std::clamp(ReadFloat(L"LegIK", L"fKneelTorsoUp", s.kneelTorsoUp), 0.0f, 100.0f);
+		s.armIK = ReadInt(L"ArmIK", L"bEnabled", 1) != 0;
+		s.handReach = std::clamp(ReadFloat(L"ArmIK", L"fReach", s.handReach), 1.0f, 100.0f);
+		s.maxHandShift = std::clamp(ReadFloat(L"ArmIK", L"fMaxShift", s.maxHandShift), 0.0f, 100.0f);
+		s.handSmoothSeconds = std::clamp(ReadFloat(L"ArmIK", L"fSmoothSeconds", s.handSmoothSeconds), 0.0f, 5.0f);
+		s.wristFollow = std::clamp(ReadFloat(L"ArmIK", L"fWristFollow", s.wristFollow), 0.0f, 1.0f);
+		s.maxWristAngle = std::clamp(ReadFloat(L"ArmIK", L"fMaxWristAngle", s.maxWristAngle), 0.0f, 180.0f);
+		s.elbowSwivel = std::clamp(ReadFloat(L"ArmIK", L"fElbowSwivel", s.elbowSwivel), 0.0f, 120.0f);
+		s.spineLean = std::clamp(ReadFloat(L"ArmIK", L"fSpineLean", s.spineLean), 0.0f, 1.0f);
+		s.maxSpineLean = std::clamp(ReadFloat(L"ArmIK", L"fMaxSpineLean", s.maxSpineLean), 0.0f, 60.0f);
 		s.verbose = ReadInt(L"Debug", L"bVerboseLog", 0) != 0;
 		return s;
 	}

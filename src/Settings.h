@@ -39,6 +39,15 @@ namespace OAA
 		float kneelMinHipHeight = 18.0f;
 		float maxKneelRise = 15.0f;
 		float lyingHeight = 22.0f;
+		bool armIK = true;
+		float handReach = 15.0f;
+		float maxHandShift = 40.0f;
+		float handSmoothSeconds = 0.12f;
+		float wristFollow = 0.0f;
+		float maxWristAngle = 45.0f;
+		float elbowSwivel = 60.0f;
+		float spineLean = 0.5f;
+		float maxSpineLean = 25.0f;
 		float kneelTorsoUp = 15.0f;
 		bool verbose = false;
 
