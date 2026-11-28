@@ -62,6 +62,7 @@ namespace OAA
 			RE::NiPoint3 delta{};                       // smoothed hand correction (world)
 			float weight = 0.0f;
 			std::string target;                         // for the log
+			RE::NiPointer<RE::NiAVObject> targetBone;   // bone the hand aims at (log)
 			float lastError = 0.0f;
 			RE::NiPoint3 gap{};  // hand - target at reference height (log)
 			float swivel = 0.0f;
@@ -99,7 +100,10 @@ namespace OAA
 			float restoreLocal = 0.0f;    // smoothed heel restore, parent-local z
 			int shoeTimer = 0;            // frames until the shoes are checked again
 			float height = 1.0f;
+			float measuredHeight = 1.0f;  // skeleton scale before the creature override
 			bool isPlayer = false;
+			bool creature = false;        // non-human skeleton/race: never moved, the reference of the scene
+			std::string race;             // race editor ID (log)
 			float supportHeight = 0.0f;  // lowest foot/calf bone above the actor's base
 			bool grounded = true;
 			bool groundedLatch = false;  // grounded at some point in this stage
@@ -152,6 +156,7 @@ namespace OAA
 
 		bool UpdateThread(ThreadState& a_state, float a_delta);
 		static RE::NiAVObject* FindBone(ActorState& a_actor, const std::string& a_anchor, const Anchors& a_anchors);
+		static bool IsCreature(RE::Actor* a_actor, const Anchors& a_anchors, std::string& a_race);
 		void Restore(ActorState& a_actor);
 		void UpdateArms(ThreadState& a_state, float a_delta);
 		static void ReleaseArm(ArmState& a_arm);

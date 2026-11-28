@@ -77,6 +77,8 @@ namespace OAA::Bridge
 			}
 		};
 
+		OStim::ThreadInterface* g_threads = nullptr;
+
 		NodeChangedListener g_nodeChanged;
 		ThreadStopListener g_threadStop;
 
@@ -112,9 +114,29 @@ namespace OAA::Bridge
 		}
 		logger::info("OStim thread interface version {:08X}", threads->getVersion());
 
+		g_threads = threads;
 		threads->registerNodeChangedListener(&g_nodeChanged);
 		threads->registerThreadStopListener(&g_threadStop);
 		logger::info("listening to OStim node changes");
 		return true;
+	}
+
+	int32_t StartScene(std::vector<RE::Actor*> a_actors)
+	{
+		if (!g_threads || g_threads->getVersion() < 2) {
+			logger::error("OStim's thread interface can't start scenes (version too old)");
+			return -1;
+		}
+		std::vector<void*> actors(a_actors.begin(), a_actors.end());
+		auto builder = g_threads->createThreadBuilder(static_cast<uint32_t>(actors.size()), actors.data());
+		if (!builder) {
+			return -1;
+		}
+		return builder->start();
+	}
+
+	bool IsThreadRunning(int32_t a_threadID)
+	{
+		return g_threads && a_threadID >= 0 && g_threads->getThread(a_threadID) != nullptr;
 	}
 }

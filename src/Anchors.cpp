@@ -88,7 +88,98 @@ namespace OAA
 			hand({ "holdingarm" }, "arm");
 			hand({ "holdingfoot" }, "foot");
 			hand({ "holdingbody" }, "body");
+
+			// Creature skeletons (vanilla names + BakaFactory / MNC genital bones). The creature is
+			// the fixed reference of its scene, so for body rules any bone near the part is enough;
+			// for hand targets every candidate sits in one group and the hand picks the nearest.
+			const std::vector<std::string> cPelvis{ "NPC Pelvis [Pelv]", "NPC Pelvis", "CME Pelvis [Pelv]", "Canine_Pelvis", "HorsePelvis", "Pelvis" };
+			const std::vector<std::string> cHead{ "NPC Head [Head]", "NPC Head", "Canine_Head", "HorseScull", "HEAD", "Sabrecat_Head [Head]" };
+			const std::vector<std::string> cJaw{ "NPC Jaw [Jaw]", "NPC Jaw1", "NPC Jaw", "NPC Head [Jaw]", "Canine_JawBone", "HorseJaw", "Jaw", "Sabrecat_Head[jaw]" };
+			const std::vector<std::string> cNeck{ "NPC Neck [Neck]", "NPC Neck", "CME Neck [Neck]", "Canine_Neck2", "HorseNeck4", "Neck", "Sabrecat_Neck[Nek2]" };
+			const std::vector<std::string> cChest{ "NPC Spine2 [Spn2]", "NPC Spine2", "CME Spine2 [Spn2]", "Canine_Ribcage", "HorseRibcage", "SpineUpperSpine", "Sabrecat_Spine[Spn3]" };
+			const std::vector<std::string> cPenis{ "CDPenis 1", "NPC Genitals01 [Gen01]", "CME Genitals01 [Gen01]", "SkeeverD 01" };
+			auto cat = [](std::initializer_list<const std::vector<std::string>*> lists) {
+				std::vector<std::string> out;
+				for (auto l : lists) {
+					out.insert(out.end(), l->begin(), l->end());
+				}
+				return out;
+			};
+			a.creatureBones = {
+				{ "pelvis", cPelvis },
+				{ "vagina", cPelvis },
+				{ "anus", cPelvis },
+				{ "penis", cat({ &cPenis, &cPelvis }) },
+				{ "head", cHead },
+				{ "mouth", cat({ &cJaw, &cHead }) },
+				{ "neck", cNeck },
+				{ "chest", cChest },
+				{ "foot", { "NPC L Foot [Lft ]", "NPC L Foot [LLft ]", "CME L Foot [Lft ]" } },
+				{ "fallback", cat({ &cPelvis, &cChest }) },
+			};
+			a.creatureBones["fallback"].push_back("NPC Root [Root]");
+			a.creatureHandTargets = {
+				{ "penis", { { "CDPenis 2", "CDPenis 3", "CDPenis 4", "NPC Genitals02 [Gen02]", "NPC Genitals03 [Gen03]", "CME Genitals02 [Gen02]",
+							   "CME Genitals03 [Gen03]", "SkeeverD 02", "SkeeverD 03" },
+							 cPelvis } },
+				{ "testicles", { { "NPC GenitalsScrotum [GenScrot]", "CME GenitalsScrotum [GenScrot]", "CDBase" }, cPelvis } },
+				{ "head", { cat({ &cHead, &cJaw }) } },
+				{ "neck", { cNeck } },
+				{ "hip", { cPelvis } },
+				{ "butt", { cPelvis } },
+				{ "anus", { cPelvis } },
+				{ "vulva", { cPelvis } },
+				{ "body", { cat({ &cChest, &cPelvis }) } },
+				{ "breast", { cChest } },
+			};
+			a.creatureRaces = { "werewolf", "vampirebeast" };
 			return a;
+		}
+
+		void ReadBoneLists(const nlohmann::json& a_obj, std::unordered_map<std::string, std::vector<std::string>>& a_out)
+		{
+			for (auto& [name, list] : a_obj.items()) {
+				std::vector<std::string> names;
+				if (list.is_string()) {
+					names.push_back(list.get<std::string>());
+				} else if (list.is_array()) {
+					for (auto& n : list) {
+						if (n.is_string()) {
+							names.push_back(n.get<std::string>());
+						}
+					}
+				}
+				if (!names.empty()) {
+					a_out[Lower(name)] = std::move(names);
+				}
+			}
+		}
+
+		void ReadBoneGroups(const nlohmann::json& a_obj, std::unordered_map<std::string, std::vector<std::vector<std::string>>>& a_out)
+		{
+			for (auto& [name, groups] : a_obj.items()) {
+				std::vector<std::vector<std::string>> list;
+				if (groups.is_array()) {
+					for (auto& g : groups) {
+						std::vector<std::string> group;
+						if (g.is_string()) {
+							group.push_back(g.get<std::string>());
+						} else if (g.is_array()) {
+							for (auto& n : g) {
+								if (n.is_string()) {
+									group.push_back(n.get<std::string>());
+								}
+							}
+						}
+						if (!group.empty()) {
+							list.push_back(std::move(group));
+						}
+					}
+				}
+				if (!list.empty()) {
+					a_out[Lower(name)] = std::move(list);
+				}
+			}
 		}
 	}
 
@@ -111,27 +202,19 @@ namespace OAA
 			}
 
 			if (auto it = j.find("handTargets"); it != j.end() && it->is_object()) {
-				for (auto& [name, groups] : it->items()) {
-					std::vector<std::vector<std::string>> list;
-					if (groups.is_array()) {
-						for (auto& g : groups) {
-							std::vector<std::string> group;
-							if (g.is_string()) {
-								group.push_back(g.get<std::string>());
-							} else if (g.is_array()) {
-								for (auto& n : g) {
-									if (n.is_string()) {
-										group.push_back(n.get<std::string>());
-									}
-								}
-							}
-							if (!group.empty()) {
-								list.push_back(std::move(group));
-							}
-						}
-					}
-					if (!list.empty()) {
-						a.handTargets[Lower(name)] = std::move(list);
+				ReadBoneGroups(*it, a.handTargets);
+			}
+			if (auto it = j.find("creatureHandTargets"); it != j.end() && it->is_object()) {
+				ReadBoneGroups(*it, a.creatureHandTargets);
+			}
+			if (auto it = j.find("creatureBones"); it != j.end() && it->is_object()) {
+				ReadBoneLists(*it, a.creatureBones);
+			}
+			if (auto it = j.find("creatureRaces"); it != j.end() && it->is_array()) {
+				a.creatureRaces.clear();
+				for (auto& r : *it) {
+					if (r.is_string() && !r.get<std::string>().empty()) {
+						a.creatureRaces.push_back(Lower(r.get<std::string>()));
 					}
 				}
 			}
@@ -148,21 +231,7 @@ namespace OAA
 			}
 
 			if (auto it = j.find("bones"); it != j.end() && it->is_object()) {
-				for (auto& [name, list] : it->items()) {
-					std::vector<std::string> names;
-					if (list.is_string()) {
-						names.push_back(list.get<std::string>());
-					} else if (list.is_array()) {
-						for (auto& n : list) {
-							if (n.is_string()) {
-								names.push_back(n.get<std::string>());
-							}
-						}
-					}
-					if (!names.empty()) {
-						a.bones[Lower(name)] = std::move(names);
-					}
-				}
+				ReadBoneLists(*it, a.bones);
 			}
 
 			if (auto it = j.find("actions"); it != j.end() && it->is_object()) {
@@ -208,8 +277,8 @@ namespace OAA
 			return !ok;
 		});
 
-		logger::info("anchors.json loaded: {} anchors, {} actions, {} hand targets, {} hand actions", a.bones.size(), a.actions.size(),
-			a.handTargets.size(), a.handActions.size());
+		logger::info("anchors.json loaded: {} anchors, {} actions, {} hand targets, {} hand actions, {} creature anchors, {} creature hand targets",
+			a.bones.size(), a.actions.size(), a.handTargets.size(), a.handActions.size(), a.creatureBones.size(), a.creatureHandTargets.size());
 		return a;
 	}
 }

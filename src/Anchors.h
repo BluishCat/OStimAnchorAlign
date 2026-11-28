@@ -24,6 +24,14 @@ namespace OAA
 		// lower-case OStim action id -> hand target name (the action actor's hand reaches the target's part)
 		std::unordered_map<std::string, std::string> handActions;
 
+		// Creatures (OCreatures etc.) have their own skeletons. For a creature actor these lists are
+		// tried first, then the normal ones; creatureBones["fallback"] is the last resort for any anchor.
+		std::unordered_map<std::string, std::vector<std::string>> creatureBones;
+		std::unordered_map<std::string, std::vector<std::vector<std::string>>> creatureHandTargets;
+		// lower-case substrings of race editor IDs that count as creatures even though the race has
+		// the ActorTypeNPC keyword (werewolves, vampire lords)
+		std::vector<std::string> creatureRaces;
+
 		// Loads Data/SKSE/Plugins/OStimAnchorAlign/anchors.json; falls back to built-in defaults.
 		static Anchors Load();
 	};

@@ -47,6 +47,7 @@ action metadata:
 - OStim Standalone 7.5 or newer
 - XPMSE or a compatible skeleton (standard bone names)
 - Optional: SKSE Menu Framework, for the in-game settings page
+- Optional, for creature scenes: OCreatures, with creature skeletons that have genital bones (e.g. BakaFactory Animated Beasts Cocks / MNC)
 - Keep OStim's **"Disable Scaling"** on (this mod is for keeping the height difference).
 
 ## Settings
@@ -56,6 +57,10 @@ action metadata:
 **Pause hotkey:** default **Left Shift + Pause** pauses/resumes all corrections. While paused (or when there is nothing to correct) the skeleton is left completely untouched, e.g. for posing with other tools.
 
 **Hands on breasts:** `fBreastUp` / `fBreastForward` under `[ArmIK]` move the hands up/down and forward/back (default 3 up). Raise them for bodies with bigger breasts than the animation expects.
+
+**Creatures:** with `[Creatures] bEnabled = 1` (default) scenes with creatures are aligned too. The creature is never moved or bent; only the human actors adapt to it (body, legs, hands). A creature counts as the size its animations were made for (`iHeightMode = 0`); `iHeightMode = 1` uses its measured skeleton scale instead. Creature bone names can be extended in `anchors.json` (`creatureBones`, `creatureHandTargets`).
+
+**Test scene:** the menu's *Test scene* section spawns a peaceful creature in front of you and starts a scene with it (or with the actor selected in the console), and removes it afterwards. Useful for checking creature scenes without finding a partner.
 
 `SKSE/Plugins/OStimAnchorAlign.ini` is re-read on every scene change, so you can edit it in game.
 The log is `Documents/My Games/Skyrim Special Edition/SKSE/OStimAnchorAlign.log`.
@@ -72,7 +77,7 @@ The log is `Documents/My Games/Skyrim Special Edition/SKSE/OStimAnchorAlign.log`
 - **Fabulous Poser** and other skeleton editors: since 0.5.0 everything runs on the main thread in a fixed order, which should stop jitter and snapping back (untested with Fabulous Poser). The pause hotkey turns all corrections off.
 - **OStim Alignment Heel Fix**: not needed since 0.5.0. Running both would probably correct heels twice; if you keep it, set `bHeelAware = 0` and `bRestoreHeels = 0`.
 - **SexLab**: not supported. The mod is built on OStim's per-stage action data, which SexLab doesn't have.
-- Tested on AE 1.6.1170, XPMSE, OStim Standalone 7.5.1b. Not tested: SE 1.5.97, Skyrim 1.7.x, skeletons other than XPMSE, creature scenes. VR is not supported.
+- Tested on AE 1.6.1170, XPMSE, OStim Standalone 7.5.1b. Not tested: SE 1.5.97, Skyrim 1.7.x, skeletons other than XPMSE. Creature scenes were tested with wolf, horse and Falmer (OCreatures 1.4, BakaFactory skeletons); others are untested. VR is not supported.
 
 ## Limits
 
@@ -85,6 +90,7 @@ The log is `Documents/My Games/Skyrim Special Edition/SKSE/OStimAnchorAlign.log`
 
 ## Changelog
 
+- **0.6.0**: creature scene support (the creature stays put, humans adapt; built-in bone names for vanilla creature skeletons and BakaFactory / MNC genital bones); test-scene tools in the menu
 - **0.5.0**: all corrections run on the main thread (fixes jitter with CBPC/SMP physics and other skeleton editors); high-heel lift counts as part of the height difference; heels no longer sink into the floor in standing scenes; adjustable hand position on breasts
 - **0.4.0**: optional in-game settings page (SKSE Menu Framework, English/Japanese); pause hotkey; the skeleton is left untouched when there is nothing to correct
 - **0.3.0**: arm IK, hip raise for kneeling actors, lying-pose detection

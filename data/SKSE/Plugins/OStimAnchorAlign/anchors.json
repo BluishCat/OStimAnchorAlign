@@ -10,6 +10,11 @@
 //            skeleton is used; the hand goes to the nearest bone of that group.
 // "handActions": OStim action id -> hand target. The action actor's nearest hand is bent (arm IK)
 //            so it touches the target actor's part the way it would at reference height.
+// "creatureBones" / "creatureHandTargets": same format as "bones" / "handTargets", tried first for
+//            creature actors (built-in lists cover vanilla creature skeletons and BakaFactory / MNC
+//            genital bones); creatureBones "fallback" is used when no other bone of an anchor exists.
+// "creatureRaces": race editor ID substrings treated as creatures even with the ActorTypeNPC
+//            keyword (default ["werewolf", "vampirebeast"]). Races without ActorTypeNPC always are.
 // "replaceDefaults": true drops the built-in action and hand action lists, so only the ones below apply.
 {
   "replaceDefaults": false,

@@ -2,6 +2,7 @@
 
 #include "Aligner.h"
 #include "Settings.h"
+#include "TestScene.h"
 
 #include "SKSEMenuFramework.h"
 
@@ -263,6 +264,49 @@ namespace OAA::UI
 				Slider("Hand smoothing (s)", "手のなめらかさ（秒）", "handsmooth", &g_cfg.handSmoothSeconds, 0.0f, 1.0f);
 			}
 			EndDisabled();
+
+			SeparatorText(T("Creatures", "クリーチャー"));
+			Check("Align creature scenes", "クリーチャーとのシーンも補正する", "creatures", &g_cfg.creatures);
+			Help("The creature is never moved or bent; only the human actors adapt to it (body, legs, hands). Off = creature scenes are left alone.",
+				"クリーチャー側は動かさず、曲げもしません。人間側だけをクリーチャーに合わせます（体・脚・手）。オフにすると、クリーチャーとのシーンは何もしません。");
+			BeginDisabled(!g_cfg.creatures);
+			{
+				int hm = g_cfg.creatureHeight;
+				const char* items[] = { T("Animation reference (1.0)", "アニメの基準（1.0）"), T("Measured skeleton scale", "スケルトンの実際の大きさ") };
+				if (Combo(L("Creature height", "クリーチャーの大きさ", "crheight").c_str(), &hm, items, 2)) {
+					g_cfg.creatureHeight = hm;
+					Changed();
+				}
+				Help("Reference: the creature counts as the size the animation was made for (safe default). Measured: a scaled creature is corrected for too.",
+					"基準：クリーチャーはアニメが想定した大きさとみなします（安全な標準）。実際の大きさ：拡大・縮小されたクリーチャーの分も補正します。");
+			}
+			EndDisabled();
+
+			if (CollapsingHeader(L("Test scene", "テスト用シーン", "test").c_str())) {
+				static int pick = 0;
+				const auto& choices = TestScene::Choices();
+				std::vector<const char*> names;
+				for (const auto& c : choices) {
+					names.push_back(T(c.en, c.ja));
+				}
+				Combo(L("Creature", "クリーチャー", "testpick").c_str(), &pick, names.data(), static_cast<int>(names.size()));
+				if (Button(L("Spawn next to me", "目の前に出す", "testspawn").c_str())) {
+					TestScene::Spawn(pick);
+				}
+				SameLine();
+				if (Button(L("Start scene", "シーン開始", "teststart").c_str())) {
+					TestScene::Start();
+				}
+				SameLine();
+				if (Button(L("Remove spawned", "出したものを消す", "testclean").c_str())) {
+					TestScene::Cleanup();
+				}
+				Help("Close the menu after pressing a button; it runs when the game resumes. Partner: the actor selected in the console, else the creature spawned last, else the nearest creature.",
+					"ボタンを押したらメニューを閉じてください。ゲームに戻った時点で実行されます。相手は「コンソールで選んだアクター」→「最後に出したクリーチャー」→「近くのクリーチャー」の順に選びます。");
+				if (const auto st = TestScene::Status(); !st.empty()) {
+					TextDisabled("%s", st.c_str());
+				}
+			}
 
 			SeparatorText(T("Other", "その他"));
 			Check("Verbose log", "詳しいログ", "verbose", &g_cfg.verbose);

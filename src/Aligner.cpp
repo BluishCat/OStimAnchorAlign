@@ -272,16 +272,26 @@ namespace OAA
 			return it->second;
 		}
 		std::vector<RE::NiPointer<RE::NiAVObject>> found;
-		if (auto it = _anchors.handTargets.find(a_name); it != _anchors.handTargets.end() && a_actor.root) {
-			for (const auto& group : it->second) {
-				for (const auto& name : group) {
-					if (auto obj = a_actor.root->GetObjectByName(RE::BSFixedString(name))) {
-						found.emplace_back(obj);
+		auto scan = [&](const std::unordered_map<std::string, std::vector<std::vector<std::string>>>& a_map) {
+			if (auto it = a_map.find(a_name); it != a_map.end()) {
+				for (const auto& group : it->second) {
+					for (const auto& name : group) {
+						if (auto obj = a_actor.root->GetObjectByName(RE::BSFixedString(name))) {
+							found.emplace_back(obj);
+						}
+					}
+					if (!found.empty()) {
+						break;
 					}
 				}
-				if (!found.empty()) {
-					break;
-				}
+			}
+		};
+		if (a_actor.root) {
+			if (a_actor.creature) {
+				scan(_anchors.creatureHandTargets);
+			}
+			if (found.empty()) {
+				scan(_anchors.handTargets);
 			}
 		}
 		return a_actor.targetCache[a_name] = std::move(found);
@@ -356,6 +366,9 @@ namespace OAA
 		// 1. undo last frame's edit where the animation didn't overwrite it, and remember the pose
 		static const std::array<RE::BSFixedString, 2> kSpine{ RE::BSFixedString{ "NPC Spine1 [Spn1]" }, RE::BSFixedString{ "NPC Spine2 [Spn2]" } };
 		for (auto& a : a_state.actors) {
+			if (a.creature) {
+				continue;  // creature limbs are never bent
+			}
 			if (!a.spine.resolved) {
 				a.spine.resolved = true;
 				for (size_t b = 0; b < 2; ++b) {
@@ -415,6 +428,9 @@ namespace OAA
 		const float alpha = cfg.handSmoothSeconds <= 0.0f ? 1.0f : 1.0f - std::exp(-a_delta / cfg.handSmoothSeconds);
 		for (size_t i = 0; i < n; ++i) {
 			auto& A = a_state.actors[i];
+			if (A.creature) {
+				continue;
+			}
 			const auto down = A.root->world.rotate * RE::NiPoint3{ 0.0f, 0.0f, -1.0f };
 			for (size_t k = 0; k < 2; ++k) {
 				auto& arm = A.arms[k];
@@ -448,6 +464,7 @@ namespace OAA
 								}
 								target = &hr.target;
 								arm.gap = gap;
+								arm.targetBone = bone;
 							}
 						}
 					}
@@ -584,16 +601,43 @@ namespace OAA
 			return it->second.get();
 		}
 		RE::NiAVObject* found = nullptr;
-		if (auto bit = a_anchors.bones.find(a_anchor); bit != a_anchors.bones.end() && a_actor.root) {
-			for (const auto& name : bit->second) {
-				if (auto obj = a_actor.root->GetObjectByName(RE::BSFixedString(name))) {
-					found = obj;
-					break;
+		auto scan = [&](const std::unordered_map<std::string, std::vector<std::string>>& a_map, const std::string& a_key) {
+			if (found || !a_actor.root) {
+				return;
+			}
+			if (auto bit = a_map.find(a_key); bit != a_map.end()) {
+				for (const auto& name : bit->second) {
+					if (auto obj = a_actor.root->GetObjectByName(RE::BSFixedString(name))) {
+						found = obj;
+						break;
+					}
 				}
 			}
+		};
+		if (a_actor.creature) {
+			scan(a_anchors.creatureBones, a_anchor);
+		}
+		scan(a_anchors.bones, a_anchor);
+		if (a_actor.creature) {
+			// a creature is the fixed reference of its scene: any bone near the part will do
+			scan(a_anchors.creatureBones, "fallback"s);
 		}
 		a_actor.boneCache[a_anchor] = RE::NiPointer<RE::NiAVObject>(found);
 		return found;
+	}
+
+	bool Aligner::IsCreature(RE::Actor* a_actor, const Anchors& a_anchors, std::string& a_race)
+	{
+		const auto race = a_actor->GetRace();
+		a_race = race && race->GetFormEditorID() ? race->GetFormEditorID() : "";
+		std::string lower = a_race;
+		std::ranges::transform(lower, lower.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+		for (const auto& s : a_anchors.creatureRaces) {
+			if (!s.empty() && lower.find(s) != std::string::npos) {
+				return true;
+			}
+		}
+		return race && !race->HasKeywordString("ActorTypeNPC");
 	}
 
 	void Aligner::Update(float a_delta)
@@ -670,6 +714,7 @@ namespace OAA
 
 		// --- 1. resolve actors and skeleton nodes ---
 		float hMin = 1e9f, hMax = -1e9f;
+		bool anyCreature = false;
 		for (size_t ai = 0; ai < n; ++ai) {
 			auto& a = a_state.actors[ai];
 			const auto actor = a.handle.get();
@@ -687,7 +732,8 @@ namespace OAA
 				a_state.failReason = std::format("actor {} has no 'NPC' node (root '{}')", ai, root->name.c_str());
 				return false;
 			}
-			if (npc != a.npcNode.get()) {
+			const bool fresh = npc != a.npcNode.get();
+			if (fresh) {
 				// 3D was (re)loaded: start from scratch on the new skeleton
 				a.npcNode.reset(npc);
 				a.boneCache.clear();
@@ -709,8 +755,36 @@ namespace OAA
 			if (a.height <= 0.01f) {
 				a.height = 1.0f;
 			}
+			a.measuredHeight = a.height;
+			if (fresh) {
+				a.creature = IsCreature(actor.get(), _anchors, a.race);
+				if (a.creature) {
+					logger::info("thread {} actor {} ({:08X}) is a creature: race '{}', skeleton scale {:.3f}, root '{}'", a_state.threadID, ai, a.formID,
+						a.race, a.measuredHeight, root->name.c_str());
+				}
+			}
+			if (a.creature) {
+				anyCreature = true;
+				if (cfg.creatureHeight == 0) {
+					a.height = 1.0f;
+				}
+			}
 			// world-space effect of what we wrote last frame (the bones we read were posed with it)
 			a.prevWorld = (a.parent->world.rotate * a.appliedLocal) * a.parent->world.scale;
+			if (a.creature) {
+				// the creature is the reference of the scene: never moved, no heels, no IK
+				a.heelWorld = {};
+				a.restoreLocal = 0.0f;
+				a.restoreWorld = {};
+				a.shoeHeel = 0.0f;
+				a.supportHeight = 0.0f;
+				a.grounded = true;
+				a.groundedLatch = true;
+				a.lying = a.lyingLatch = false;
+				a.kneeling = a.kneelingLatch = false;
+				a.kneelRiseMax = 0.0f;
+				continue;
+			}
 			// heels: NiOverride lifts the whole skeleton through the same node. The animation was made
 			// without that lift, so it is part of the error just like the scale (OStim's heel removal
 			// cancels it, then this is ~0).
@@ -827,6 +901,14 @@ namespace OAA
 			hMin = std::min(hMin, a.height);
 			hMax = std::max(hMax, a.height);
 		}
+		if (anyCreature && !cfg.creatures) {
+			for (auto& a : a_state.actors) {
+				Restore(a);
+				a.currentWorld = {};
+			}
+			a_state.failReason = "creature scene, creature support is off ([Creatures] bEnabled = 0)";
+			return false;
+		}
 
 		// --- 2. per-rule relation that would hold at the animation's reference height (1.0) ---
 		// A bone at P with skeleton scale h sits at T + R*(h*l). At h=1 it would be at T + R*l,
@@ -868,8 +950,13 @@ namespace OAA
 		// grounded actor can still slide on the floor.
 		std::vector<float> mobH(n, 1.0f), mobBase(n, 1.0f), mobZ(n, 1.0f);
 		constexpr float kPinned = 0.02f;
+		const auto humans = std::ranges::count_if(a_state.actors, [](const ActorState& s) { return !s.creature; });
 		for (size_t i = 0; i < n; ++i) {
 			const auto& a = a_state.actors[i];
+			if (a.creature) {
+				mobH[i] = mobBase[i] = mobZ[i] = 0.0f;
+				continue;
+			}
 			float m = 1.0f;
 			switch (cfg.moveMode) {
 			case MoveMode::kShorter:
@@ -879,7 +966,7 @@ namespace OAA
 				m = (hMax - hMin > 0.001f && a.height <= hMin + 0.001f) ? kPinned : 1.0f;
 				break;
 			case MoveMode::kNPCsOnly:
-				m = (a.isPlayer && n > 1) ? kPinned : 1.0f;
+				m = (a.isPlayer && humans > 1) ? kPinned : 1.0f;
 				break;
 			default:
 				break;
@@ -935,7 +1022,7 @@ namespace OAA
 			const bool kneelLift = cfg.legIK && cfg.kneelLift;
 			auto isKneeler = [&](size_t i) { return kneelLift && a_state.actors[i].kneeling; };
 			for (size_t i = 0; i < n; ++i) {
-				if (a_state.actors[i].lying) {
+				if (a_state.actors[i].lying || a_state.actors[i].creature) {
 					zFix[i] = 0.0f;
 				}
 			}
@@ -1125,9 +1212,44 @@ namespace OAA
 			for (size_t i = 0; i < n; ++i) {
 				const auto& a = a_state.actors[i];
 				const auto avg = a_state.samples ? a.sampleSum / static_cast<float>(a_state.samples) : RE::NiPoint3{};
+				if (a.creature) {
+					s += std::format(" [{}] creature '{}' scale={:.3f} h={:.3f} (reference, not moved)", i, a.race, a.measuredHeight, a.height);
+					continue;
+				}
 				s += std::format(" [{}] h={:.3f} heel={:.1f} shoes={:.1f} restored={:.1f}{} offset={}", i, a.height, a.heelWorld.z, a.shoeHeel, a.restoreLocal, a.lying ? " lying" : a.grounded ? (a.kneeling ? " kneeling" : " grounded") : " lifted", Fmt(avg));
 			}
 			logger::info("thread {} node '{}' settled ({} samples, {} rules):{}", a_state.threadID, a_state.nodeID, a_state.samples, rels.size(), s);
+			if (anyCreature) {
+				// which bones the rules used, and where creature bones sit in the creature's own frame
+				// (to tune creature bone lists and the measured-height mode)
+				auto where = [](const ActorState& st, RE::NiAVObject* b) -> std::string {
+					if (!b) {
+						return "-";
+					}
+					if (!st.creature) {
+						return std::format("'{}'", b->name.c_str());
+					}
+					const float sc = st.root->world.scale > 0.0001f ? st.root->world.scale : 1.0f;
+					const auto p = (st.root->world.rotate.Transpose() * (b->world.translate - st.root->world.translate)) / sc;
+					return std::format("'{}'{}", b->name.c_str(), Fmt(p));
+				};
+				std::string rs;
+				for (const auto& c : a_state.constraints) {
+					auto& A = a_state.actors[c.a];
+					auto& B = a_state.actors[c.b];
+					rs += std::format(" {}[{}:{}={} -> {}:{}={}]", c.action, c.a, c.anchorA, where(A, FindBone(A, c.anchorA, _anchors)), c.b, c.anchorB,
+						where(B, FindBone(B, c.anchorB, _anchors)));
+				}
+				for (size_t i = 0; i < n; ++i) {
+					const auto& a = a_state.actors[i];
+					for (size_t k = 0; k < 2; ++k) {
+						if (a.arms[k].weight > 0.0f && a.arms[k].targetBone) {
+							rs += std::format(" {}{}hand->{}('{}', err={:.1f})", i, k ? "R" : "L", a.arms[k].target, a.arms[k].targetBone->name.c_str(), a.arms[k].lastError);
+						}
+					}
+				}
+				logger::info("thread {} node '{}' creature scene bones:{}", a_state.threadID, a_state.nodeID, rs.empty() ? " (no rules)"s : rs);
+			}
 		}
 
 		if (cfg.verbose) {

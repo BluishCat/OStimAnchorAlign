@@ -85,6 +85,8 @@ namespace OAA
 		s.breastForward = ReadFloat(L"ArmIK", L"fBreastForward", 0.0f);
 		s.heelAware = ReadInt(L"General", L"bHeelAware", 1) != 0;
 		s.restoreHeels = ReadInt(L"General", L"bRestoreHeels", 1) != 0;
+		s.creatures = ReadInt(L"Creatures", L"bEnabled", 1) != 0;
+		s.creatureHeight = std::clamp(ReadInt(L"Creatures", L"iHeightMode", 0), 0, 1);
 		s.verbose = ReadInt(L"Debug", L"bVerboseLog", 0) != 0;
 		s.updateHook = std::clamp(ReadInt(L"Debug", L"iUpdateHook", 1), 0, 1);
 		return s;
@@ -152,6 +154,8 @@ namespace OAA
 		WriteFloat(L"ArmIK", L"fBreastForward", breastForward);
 		WriteInt(L"General", L"bHeelAware", heelAware ? 1 : 0);
 		WriteInt(L"General", L"bRestoreHeels", restoreHeels ? 1 : 0);
+		WriteInt(L"Creatures", L"bEnabled", creatures ? 1 : 0);
+		WriteInt(L"Creatures", L"iHeightMode", creatureHeight);
 		WriteInt(L"Debug", L"bVerboseLog", verbose ? 1 : 0);
 		WriteInt(L"Debug", L"iUpdateHook", updateHook);
 	}

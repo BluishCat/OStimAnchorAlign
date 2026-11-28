@@ -53,6 +53,8 @@ namespace OAA
 		float breastForward = 0.0f;  // ... and forward axis (away from the chest)
 		bool heelAware = true;  // treat high-heel lift as part of the height difference
 		bool restoreHeels = true;  // give the heel lift back to standing actors when OStim removed it
+		bool creatures = true;       // align scenes with creatures (the creature stays put, humans adapt)
+		int creatureHeight = 0;      // creature height: 0 = animation reference (1.0), 1 = measured skeleton scale
 		bool verbose = false;
 		int updateHook = 1;  // 1 = run in Main::Update (main thread), 0 = directly in the HUD advance (legacy)
 		uint32_t pauseKey = 0xC5;       // DirectInput scan code, 0 = none
