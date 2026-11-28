@@ -28,6 +28,8 @@ OStimAnchorAlign includes third-party code:
    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
    SOFTWARE.
 
-3. CommonLibSSE-NG (statically linked)
-   License: MIT
-   https://github.com/CharmedBaryon/CommonLibSSE-NG
+3. CommonLibSSE-NG / CommonLibVR (statically linked)
+   Copyright the CommonLibSSE, CommonLibSSE-NG and CommonLibVR contributors
+   License: GPL-3.0-or-later WITH Modding Exception AND GPL-3.0 Linking Exception
+   (with Corresponding Source); see EXCEPTIONS.md in the repository
+   https://github.com/alandtse/CommonLibVR (ng branch)

@@ -29,10 +29,10 @@
 
 ## 必要なもの
 
-- Skyrim SE 1.5.97 / AE 1.6.x
-- SKSE64
-- Address Library for SKSE Plugins
-- OStim Standalone 7.5以降
+- Skyrim SE 1.5.97 / AE 1.6.x、または Skyrim VR 1.4.15（試験的。互換性を参照）
+- SKSE64（VRでは SKSEVR）
+- Address Library for SKSE Plugins（VRでは VR Address Library for SKSEVR）
+- OStim Standalone 7.5以降（VRでは、その上に OStim Standalone VR）
 - XPMSE、または互換のスケルトン（標準のボーンの名前を使うもの）
 - 任意：SKSE Menu Framework（ゲーム内の設定画面を使う場合）
 - 任意（クリーチャーのシーン）：OCreatures と、性器ボーンのあるクリーチャースケルトン（BakaFactory Animated Beasts Cocks / MNC など）
@@ -51,7 +51,7 @@
 **テスト用シーン**：メニューの「テスト用シーン」で、おとなしいクリーチャーを目の前に出して、そのままシーンを始められます（コンソールで選んだアクターが相手でも可）。終わったら消せます。相手を探さずにクリーチャーのシーンを確認するのに使えます。
 
 `SKSE/Plugins/OStimAnchorAlign.ini` はシーンが切り替わるたびに読み直されるので、ゲーム中に編集できます。
-ログは `Documents/My Games/Skyrim Special Edition/SKSE/OStimAnchorAlign.log` です。
+ログは `Documents/My Games/Skyrim Special Edition/SKSE/OStimAnchorAlign.log` です（VRでは `Documents/My Games/Skyrim VR/SKSE/OStimAnchorAlign.log`）。
 
 ## 困ったときは
 
@@ -65,7 +65,8 @@
 - **Fabulous Poser** などのポーズ編集MOD：0.5.0からすべての処理をメインスレッドで決まった順番に実行するので、震えや元に戻される問題は直っているはずです（Fabulous Poser では未確認）。一時停止キーで補正を止めることもできます。
 - **OStim Alignment Heel Fix**：0.5.0からは不要です。両方を使うとヒールの分が二重に補正される可能性があります。使い続ける場合は `bHeelAware = 0` と `bRestoreHeels = 0` にしてください。
 - **SexLab**：非対応です。このMODはOStimのステージごとのアクション情報を土台にしていて、SexLabにはその情報がないためです。
-- 確認済み：AE 1.6.1170、XPMSE、OStim Standalone 7.5.1b。未確認：SE 1.5.97、Skyrim 1.7.x、XPMSE以外のスケルトン。クリーチャーのシーンはオオカミ・馬・ファルマーで確認済み（OCreatures 1.4、BakaFactory のスケルトン）、それ以外は未確認。VRには対応していません。
+- 確認済み：AE 1.6.1170、XPMSE、OStim Standalone 7.5.1b。未確認：SE 1.5.97、Skyrim 1.7.x、XPMSE以外のスケルトン。クリーチャーのシーンはオオカミ・馬・ファルマーで確認済み（OCreatures 1.4、BakaFactory のスケルトン）、それ以外は未確認。
+- **Skyrim VR（試験的、0.6.1から）**：同じDLLが VR 1.4.15 と OStim Standalone VR で動きます。確認済み：読み込み、メインループのフック、毎フレームの処理がメインスレッドで動くこと。未確認：VRで実際にシーンがどう見えるか（特にプレイヤーが参加するシーン）。SKSE Menu Framework にはVR版がないため、設定はINIのみです。報告（ログとステージ名）を歓迎します。
 
 ## 制限
 
@@ -77,6 +78,7 @@
 
 ## 更新履歴
 
+- **0.6.1**：Skyrim VR に試験的に対応（SE・AE・VRで同じDLL）。SE/AEでの動作に変更はありません
 - **0.6.0**：クリーチャーのシーンに対応（クリーチャーは動かさず人間側が合わせる。バニラのクリーチャースケルトンと BakaFactory / MNC の性器ボーンの名前を内蔵）、メニューにテスト用シーン機能を追加
 - **0.5.0**：すべての補正をメインスレッドで実行（CBPC/SMP物理や他のスケルトン編集MODとの震えを解消）、ハイヒールの高さも身長差として補正、立ちシーンでヒールが床に埋まらないよう修正、胸に触れる手の位置を調整可能に
 - **0.4.0**：ゲーム内設定画面（SKSE Menu Framework、英語・日本語対応、任意）、一時停止キー、補正するものがないときはスケルトンに触れないよう変更
@@ -85,4 +87,4 @@
 
 ## ライセンス
 
-GPL-3.0-or-later。OStim Standaloneのプラグインインターフェースのヘッダー（GPL-3.0、VersuchDrei ほか）と、SKSE Menu Framework のヘッダー（MIT）を含みます。詳しくは THIRD_PARTY_NOTICES.txt を参照してください。
+GPL-3.0-or-later。OStim Standaloneのプラグインインターフェースのヘッダー（GPL-3.0、VersuchDrei ほか）と、SKSE Menu Framework のヘッダー（MIT）を含み、CommonLibSSE-NG（GPL-3.0-or-later、例外条項付き）を静的リンクしています。詳しくは THIRD_PARTY_NOTICES.txt を参照してください。

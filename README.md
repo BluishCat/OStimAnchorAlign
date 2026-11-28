@@ -41,10 +41,10 @@ action metadata:
 
 ## Requirements
 
-- Skyrim SE 1.5.97 / AE 1.6.x
-- SKSE64
-- Address Library for SKSE Plugins
-- OStim Standalone 7.5 or newer
+- Skyrim SE 1.5.97 / AE 1.6.x, or Skyrim VR 1.4.15 (experimental, see Compatibility)
+- SKSE64 (VR: SKSEVR)
+- Address Library for SKSE Plugins (VR: VR Address Library for SKSEVR)
+- OStim Standalone 7.5 or newer (VR: OStim Standalone VR on top of it)
 - XPMSE or a compatible skeleton (standard bone names)
 - Optional: SKSE Menu Framework, for the in-game settings page
 - Optional, for creature scenes: OCreatures, with creature skeletons that have genital bones (e.g. BakaFactory Animated Beasts Cocks / MNC)
@@ -63,7 +63,7 @@ action metadata:
 **Test scene:** the menu's *Test scene* section spawns a peaceful creature in front of you and starts a scene with it (or with the actor selected in the console), and removes it afterwards. Useful for checking creature scenes without finding a partner.
 
 `SKSE/Plugins/OStimAnchorAlign.ini` is re-read on every scene change, so you can edit it in game.
-The log is `Documents/My Games/Skyrim Special Edition/SKSE/OStimAnchorAlign.log`.
+The log is `Documents/My Games/Skyrim Special Edition/SKSE/OStimAnchorAlign.log` (VR: `Documents/My Games/Skyrim VR/SKSE/OStimAnchorAlign.log`).
 
 ## Troubleshooting
 
@@ -77,7 +77,8 @@ The log is `Documents/My Games/Skyrim Special Edition/SKSE/OStimAnchorAlign.log`
 - **Fabulous Poser** and other skeleton editors: since 0.5.0 everything runs on the main thread in a fixed order, which should stop jitter and snapping back (untested with Fabulous Poser). The pause hotkey turns all corrections off.
 - **OStim Alignment Heel Fix**: not needed since 0.5.0. Running both would probably correct heels twice; if you keep it, set `bHeelAware = 0` and `bRestoreHeels = 0`.
 - **SexLab**: not supported. The mod is built on OStim's per-stage action data, which SexLab doesn't have.
-- Tested on AE 1.6.1170, XPMSE, OStim Standalone 7.5.1b. Not tested: SE 1.5.97, Skyrim 1.7.x, skeletons other than XPMSE. Creature scenes were tested with wolf, horse and Falmer (OCreatures 1.4, BakaFactory skeletons); others are untested. VR is not supported.
+- Tested on AE 1.6.1170, XPMSE, OStim Standalone 7.5.1b. Not tested: SE 1.5.97, Skyrim 1.7.x, skeletons other than XPMSE. Creature scenes were tested with wolf, horse and Falmer (OCreatures 1.4, BakaFactory skeletons); others are untested.
+- **Skyrim VR (experimental, since 0.6.1)**: the same DLL works on VR 1.4.15 with OStim Standalone VR. Confirmed: it loads, installs the main-loop hook and runs every frame on the main thread. Not confirmed yet: how scenes actually look in VR, especially scenes with the player. SKSE Menu Framework has no VR version, so settings are INI only. Reports (log + stage name) are very welcome.
 
 ## Limits
 
@@ -90,6 +91,7 @@ The log is `Documents/My Games/Skyrim Special Edition/SKSE/OStimAnchorAlign.log`
 
 ## Changelog
 
+- **0.6.1**: Skyrim VR support (experimental): one DLL for SE, AE and VR; no changes for SE/AE
 - **0.6.0**: creature scene support (the creature stays put, humans adapt; built-in bone names for vanilla creature skeletons and BakaFactory / MNC genital bones); test-scene tools in the menu
 - **0.5.0**: all corrections run on the main thread (fixes jitter with CBPC/SMP physics and other skeleton editors); high-heel lift counts as part of the height difference; heels no longer sink into the floor in standing scenes; adjustable hand position on breasts
 - **0.4.0**: optional in-game settings page (SKSE Menu Framework, English/Japanese); pause hotkey; the skeleton is left untouched when there is nothing to correct
@@ -98,4 +100,4 @@ The log is `Documents/My Games/Skyrim Special Edition/SKSE/OStimAnchorAlign.log`
 
 ## License
 
-GPL-3.0-or-later. Contains OStim Standalone's plugin interface headers (GPL-3.0, VersuchDrei and contributors) and the SKSE Menu Framework header (MIT). See THIRD_PARTY_NOTICES.txt.
+GPL-3.0-or-later. Contains OStim Standalone's plugin interface headers (GPL-3.0, VersuchDrei and contributors) and the SKSE Menu Framework header (MIT), and statically links CommonLibSSE-NG (GPL-3.0-or-later with exceptions). See THIRD_PARTY_NOTICES.txt.
